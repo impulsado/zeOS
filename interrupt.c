@@ -12,6 +12,11 @@
 Gate idt[IDT_ENTRIES];
 Register    idtR;
 
+// IMPO: Com que aquesta funcio esta implementada en ASM i aixo es codi C
+// el pre-compilador ha de saber previament les funcions a fer servir perque el linker
+// ho relacioni amb la funcio escrita en ASM.
+void clock_handler(void);
+
 char char_map[] =
 {
   '\0','\0','1','2','3','4','5','6',
