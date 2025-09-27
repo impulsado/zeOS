@@ -85,3 +85,10 @@ ENTRY(clock_handler)
 		
 	// 4. Saltar de system mode a user mode
 	iret
+
+ENTRY(keyboard_handler)
+	SAVE_ALL
+	call keyboard_routine
+	EOI
+	RESTORE_ALL
+	iret

@@ -16,6 +16,7 @@ Register    idtR;
 // el pre-compilador ha de saber previament les funcions a fer servir perque el linker
 // ho relacioni amb la funcio escrita en ASM.
 void clock_handler(void);
+void keyboard_handler(void);
 
 char char_map[] =
 {
@@ -88,12 +89,44 @@ void setIdt()
   set_handlers();
 
   /* ADD INITIALIZATION CODE FOR INTERRUPT VECTOR */
-  setInterruptHandler(32, clock_handler, 0);  // 0 == 
+  setInterruptHandler(32, clock_handler, 0); 
+  setInterruptHandler(33, keyboard_handler, 0);
 
   set_idt_reg(&idtR);
 }
 
 void clock_routine(void)
 {
+	// 1. Call implemented routine
 	zeos_show_clock();
+}
+
+void keyboard_routine(void)
+{
+	unsigned char b;
+	unsigned char mode;
+	unsigned char scan_code;
+	unsigned char c = 'x';
+
+	// 1. Read the corresponding keyboard port (0x60)
+	b = inb(0x60);
+	
+	// 2. make (key_pressed) || break (key_released)
+	mode = b & 0x80;
+	scan_code = b & 0x7F;
+
+	// 2.0. Si el mode es break --> Ja hem pintat previament
+	if (mode == 1)
+		return;
+
+	// 2.1. Get char from scan code using char_map
+	c = char_map[scan_code];
+	
+	// 2.2. If is not ASCII --> Print 'C'
+	if (c == '\0')
+		c = 'C';
+
+	// 3. Print screen
+	// (0x0, 0x0) --> Upper-left
+	printc_xy(0x0, 0x0, c);
 }
