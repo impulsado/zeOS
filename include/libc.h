@@ -10,6 +10,8 @@
 
 int write(int fd, char *buffer, int size);
 
+void perror(void);
+
 void itoa(int a, char *b);
 
 int strlen(char *a);

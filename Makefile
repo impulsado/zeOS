@@ -41,6 +41,7 @@ LIBZEOS = -L . -l zeos
 USROBJ = \
 	libc.o \
 	suma.o \
+	wrappers.o \
 	# libjp.a \
 
 all:zeos.bin
@@ -71,7 +72,11 @@ suma.s: suma.S $(INCLUDEDIR)/asm.h $(INCLUDEDIR)/segment.h
 sys_call_table.s: sys_call_table.S $(INCLUDEDIR)/asm.h $(INCLUDEDIR)/segment.h
 	$(CPP) $(ASMFLAGS) -o $@ $<
 
-user.o:user.c $(INCLUDEDIR)/libc.h
+# ! NO OBLIDAR
+wrappers.s: wrappers.S $(INCLUDEDIR)/asm.h
+	$(CPP) $(ASMFLAGS) -o $@ $<
+
+user.o:user.c wrappers.S $(INCLUDEDIR)/libc.h
 
 interrupt.o:interrupt.c $(INCLUDEDIR)/interrupt.h $(INCLUDEDIR)/segment.h $(INCLUDEDIR)/types.h
 
@@ -85,8 +90,7 @@ mm.o:mm.c $(INCLUDEDIR)/types.h $(INCLUDEDIR)/mm.h
 
 sys.o:sys.c $(INCLUDEDIR)/devices.h
 
-utils.o:utils.c $(INCLUDEDIR)/utils.h
-
+utils.o: utils.c $(INCLUDEDIR)/utils.h
 
 system.o:system.c $(INCLUDEDIR)/hardware.h system.lds $(SYSOBJ) $(INCLUDEDIR)/segment.h $(INCLUDEDIR)/types.h $(INCLUDEDIR)/interrupt.h $(INCLUDEDIR)/system.h $(INCLUDEDIR)/sched.h $(INCLUDEDIR)/mm.h $(INCLUDEDIR)/io.h $(INCLUDEDIR)/mm_address.h 
 

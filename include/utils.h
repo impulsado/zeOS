@@ -11,6 +11,8 @@ int access_ok(int type, const void *addr, unsigned long size);
 
 #define min(a,b)	(a<b?a:b)
 
+void writeMSR(unsigned int i, unsigned int value);
+
 unsigned long get_ticks(void);
 
 #endif
