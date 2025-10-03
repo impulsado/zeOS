@@ -22,9 +22,10 @@ ENTRY(write)
 	| param1	|8
 	| param...	|12
 	*/
-	movl 8(%ebp), %ebx;  # ebx <-- fd
+	// IMPO: Recorda que en el SW. CTX. es EDX > ECX > EBX --> param1 ha d'anar a edx
+	movl 8(%ebp), %edx;  # edx <-- fd
 	movl 12(%ebp), %ecx;  # ecx <-- buffer
-	movl 16(%ebp), %edx;  # edx <-- size
+	movl 16(%ebp), %ebx;  # ebx <-- size
 
 	# 4. Ficar valor eax del write (0x04)
 	movl $0x04, %eax

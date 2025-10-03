@@ -67,9 +67,15 @@ int sys_write(int fd, char *buffer, int size)
 		return -EINVAL;  
 
 	// General case
-	ret = sys_write_console(buffer, size);
+	char system_buffer[size];
+	ret = copy_from_user(buffer, system_buffer, size);
+       	
+	if (ret != 0)
+		return -EFAULT;  // No se quin	
+
+	ret = sys_write_console(system_buffer, size);
 	if (ret < 0)
-		return -1;  // NO se quin
+		return -EINVAL;  // NO se quin
 
 	return 0;
 

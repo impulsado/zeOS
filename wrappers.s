@@ -21,9 +21,9 @@
  # NOTA: Venim d'una altra funcio que ha deixat els param en la pila.
  # Aixi que dibuixem la pila i veiem el offset
 # 25 "wrappers.S"
- movl 8(%ebp), %ebx; # ebx <-- fd
+ movl 8(%ebp), %edx; # ebx <-- fd
  movl 12(%ebp), %ecx; # ecx <-- buffer
- movl 16(%ebp), %edx; # edx <-- size
+ movl 16(%ebp), %ebx; # edx <-- size
 
  # 4. Ficar valor eax del write (0x04)
  movl $0x04, %eax
