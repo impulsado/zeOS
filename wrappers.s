@@ -20,10 +20,10 @@
  # 3. Set-up params.
  # NOTA: Venim d'una altra funcio que ha deixat els param en la pila.
  # Aixi que dibuixem la pila i veiem el offset
-# 25 "wrappers.S"
- movl 8(%ebp), %edx; # ebx <-- fd
+# 26 "wrappers.S"
+ movl 8(%ebp), %edx; # edx <-- fd
  movl 12(%ebp), %ecx; # ecx <-- buffer
- movl 16(%ebp), %ebx; # edx <-- size
+ movl 16(%ebp), %ebx; # ebx <-- size
 
  # 4. Ficar valor eax del write (0x04)
  movl $0x04, %eax
@@ -55,3 +55,46 @@ write_post_sysenter:
 write_no_error:
  popl %ebp
  ret # Retornar a user code
+
+.globl gettime; .type gettime, @function; .align 0; gettime:
+ # Dynamic Link
+ push %ebp
+ movl %esp, %ebp
+
+ # Save ECX, EDX
+ push %edx
+ push %ecx
+
+ # Set params.
+ # No params needed
+
+ # Set EAX value
+ movl $10, %eax
+
+ # Create fake dynamic-link for the sysenter handler
+ push $getTime_post_sysenter
+ push %ebp
+ movl %esp, %ebp
+
+ # Make syscall
+ sysenter
+
+getTime_post_sysenter:
+ # Clear the stack
+ pop %ebp; # restore ebp_wrapper
+ addl $4, %esp; # Remove @getTime_post_sysenter
+ pop %ecx
+ pop %ebx
+
+ # Process the result
+ cmpl $0, %eax; # if (eax < 0) error
+ jge getTime_no_error
+
+ # It has an error
+ negl %eax
+ movl %eax, errno
+ movl $-1, %eax
+
+getTime_no_error:
+ pop %ebp; # restore ebp_user_prog
+ ret; # goto usr_prog

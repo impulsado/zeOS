@@ -18,6 +18,9 @@
 #define LECTURA 0
 #define ESCRIPTURA 1
 
+// 
+extern unsigned int zeos_ticks;
+
 // https://android.googlesource.com/kernel/lk/+/dima/for-travis/include/errno.h
 
 int check_fd(int fd, int permissions)
@@ -67,16 +70,32 @@ int sys_write(int fd, char *buffer, int size)
 		return -EINVAL;  
 
 	// General case
-	char system_buffer[size];
-	ret = copy_from_user(buffer, system_buffer, size);
-       	
-	if (ret != 0)
-		return -EFAULT;  // No se quin	
+	const int CHUNK = 256;  // valor trivial
+	int total = 0;
+	char k_buffer[CHUNK];
+	int remaining;
+	int temp_size;
 
-	ret = sys_write_console(system_buffer, size);
-	if (ret < 0)
-		return -EINVAL;  // NO se quin
+	while (total < size)
+	{
+		remaining = size - total;
+		temp_size = (size > remaining) ? CHUNK : remaining;
+		
+		ret = copy_from_user(buffer + total, k_buffer, temp_size);
+		if (ret != 0)
+			return -EFAULT;
 
-	return 0;
+		ret = sys_write_console(k_buffer, temp_size);
+		// sempre retorna temp_size
 
+		total += temp_size;
+	}
+	
+
+	return total;
+}
+
+int sys_gettime(void)
+{
+	return zeos_ticks;
 }

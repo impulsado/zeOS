@@ -56,4 +56,48 @@ write_post_sysenter:
 	movl $-1, %eax;  # al programa usuari li indiquem que ha anat malament--> -1
 write_no_error:
 	popl %ebp
-	ret  # Retornar a user code	
+	ret  # Retornar a user code 
+
+ENTRY(gettime)
+	# Dynamic Link
+	push %ebp
+	movl %esp, %ebp
+
+	# Save ECX, EDX
+	push %edx
+	push %ecx
+	
+	# Set params.
+	# No params needed
+
+	# Set EAX value
+	movl $10, %eax
+	
+	# Create fake dynamic-link for the sysenter handler
+	push $getTime_post_sysenter
+	push %ebp
+	movl %esp, %ebp
+	
+	# Make syscall
+	sysenter
+
+getTime_post_sysenter:
+	# Clear the stack
+	pop %ebp;  # restore ebp_wrapper
+	addl $4, %esp;  # Remove @getTime_post_sysenter
+	pop %ecx
+	pop %ebx
+
+	# Process the result
+	cmpl $0, %eax; # if (eax < 0) error
+	jge getTime_no_error
+
+	# It has an error
+	negl %eax
+	movl %eax, errno
+	movl $-1, %eax
+
+getTime_no_error:
+	pop %ebp;  # restore ebp_user_prog
+	ret;  # goto usr_prog
+	

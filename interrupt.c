@@ -21,6 +21,12 @@ void keyboard_handler(void);
 void system_call_handler(void);
 void writeMSR(unsigned int i, unsigned int low);
 
+
+// Ho definim aqui perque aixo es algo relacionat amb la interrupcio "getTime"
+// No te sentit definir-ho a un altre lloc (system.c) perque aquell fitxer nomes s'encarrega de cridar a wrappers, no fer coses d'interrupcions
+unsigned int zeos_ticks = 0;
+
+
 char char_map[] =
 {
   '\0','\0','1','2','3','4','5','6',
@@ -110,7 +116,9 @@ void setIdt()
 void clock_routine(void)
 {
 	// 1. Call implemented routine
-	zeos_show_clock();
+	// zeos_show_clock();
+	
+	zeos_ticks++;
 }
 
 void keyboard_routine(void)
