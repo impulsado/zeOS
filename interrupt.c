@@ -16,6 +16,7 @@ Register    idtR;
 // IMPO: Com que aquesta funcio esta implementada en ASM i aixo es codi C
 // el pre-compilador ha de saber previament les funcions a fer servir perque el linker
 // ho relacioni amb la funcio escrita en ASM.
+void page_fault_handler_new(void);
 void clock_handler(void);
 void keyboard_handler(void);
 void system_call_handler(void);
@@ -98,6 +99,7 @@ void setIdt()
   set_handlers();
 
   /* ADD INITIALIZATION CODE FOR INTERRUPT VECTOR */
+  setInterruptHandler(14, page_fault_handler_new, 0);
   setInterruptHandler(32, clock_handler, 0); 
   setInterruptHandler(33, keyboard_handler, 0);
   
@@ -149,4 +151,27 @@ void keyboard_routine(void)
 	// 3. Print screen
 	// (0x0, 0x0) --> Upper-left
 	printc_xy(0x0, 0x0, c);
+}
+
+// NOTE: Aixo es una exception, automaticament es guarda un codi d'error post al eip
+// Com que fem servir el truc d'accedir com si fos un parametre, haurem d'afegir-lo i que el tingui en compte el compilador.
+void page_fault_routine_new(unsigned int error, unsigned int eip)
+{
+	const char HEXA[] = "0123456789ABCDEF";
+	char dir[32/4 + 1];  // 32b / 4b (1 hexa) = 0xXXXXXXXX (8 X's) ;; +1 = '\0'
+	int i;
+	int hexa_act;
+
+        printk("\n Process generates a PAGE FAULT exception at EIP: 0x");
+
+	// Convert to hexa
+	for (i = 7; i >= 0; i--)
+	{
+		hexa_act = (eip >> 4*i) & 0x0F;  // Agafar els xxxx actual
+		dir[7-i] = HEXA[hexa_act];
+	}
+	dir[8] = '\0';
+
+	printk(dir);
+        while (1);
 }

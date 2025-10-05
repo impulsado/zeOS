@@ -94,6 +94,10 @@ ENTRY(keyboard_handler)
 	RESTORE_ALL
 	iret
 
+ENTRY(page_fault_handler_new)
+	call page_fault_routine_new
+	iret;  # Tot i que aixo no passara
+
 ENTRY(writeMSR)
 	# MSR[ecx] <-- edx:eax (Com que estem en 32b --> edx = 0)
 	push %ebp

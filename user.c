@@ -18,5 +18,10 @@ int __attribute__ ((__section__(".text.main"))) main(void)
 		write(1, "Temps que ha passat: ", 21);
 		write(1, buf, strlen(buf));
 	}
+
+
+	char *p = 0;
+	*p = 'x';
+
   	while (1);
 }
