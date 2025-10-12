@@ -17,7 +17,7 @@ enum state_t { ST_RUN, ST_READY, ST_BLOCKED };
 struct task_struct {
   int PID;			/* Process ID. This MUST be the first field of the struct. */
   page_table_entry * dir_pages_baseAddr;
-  // TODO: Aqui haure d'afegir kernel_esp
+  unsigned long *kernel_esp;
   struct list_head list; //This is the anchor in the list
 
 };
@@ -46,6 +46,8 @@ struct task_struct * current();
 void task_switch(union task_union*t);
 
 struct task_struct *list_head_to_task_struct(struct list_head *l);
+union task_union *list_head_to_task_union(struct list_head *l);
+
 
 int allocate_DIR(struct task_struct *t);
 
