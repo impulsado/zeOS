@@ -28,6 +28,7 @@ SYSOBJ = \
 	sys_call_table.o \
 	io.o \
 	sched.o \
+	sched_utils.o \
 	sys.o \
 	mm.o \
 	devices.o \
@@ -76,13 +77,16 @@ sys_call_table.s: sys_call_table.S $(INCLUDEDIR)/asm.h $(INCLUDEDIR)/segment.h
 wrappers.s: wrappers.S $(INCLUDEDIR)/asm.h
 	$(CPP) $(ASMFLAGS) -o $@ $<
 
+sched_utils.s: sched_utils.S $(INCLUDEDIR)/asm.h
+	$(CPP) $(ASMFLAGS) -o $@ $<
+
 user.o:user.c wrappers.S $(INCLUDEDIR)/libc.h
 
 interrupt.o:interrupt.c $(INCLUDEDIR)/interrupt.h $(INCLUDEDIR)/segment.h $(INCLUDEDIR)/types.h
 
 io.o:io.c $(INCLUDEDIR)/io.h
 
-sched.o:sched.c $(INCLUDEDIR)/sched.h
+sched.o:sched.c $(INCLUDEDIR)/sched.h sched_utils.S
 
 libc.o:libc.c $(INCLUDEDIR)/libc.h
 
