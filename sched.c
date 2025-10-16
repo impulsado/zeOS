@@ -81,6 +81,8 @@ void cpu_idle(void)
 {
 	__asm__ __volatile__("sti": : :"memory");
 
+	printk("CPU is IDLE\n");
+
 	while(1)
 	{
 	;
@@ -165,7 +167,7 @@ void init_task1(void)
 	Un process te dues piles:
 		- Mode usuari: Esta en USER_DATA
 		- Mode sistema: La que hi ha en el union
-	# No hi ha una pila de kernel com a tal. Aquest no es res.
+	# No hi ha una pila de kernel com a tal. Aquesta no es res.
 	Necessitem assignar els reg. que farem servir per automatitzar el trovar la pila de sistema del process
 	Es a dir, on esta el bottom (top en realitat) "init_stack":
 		- Assignar-ho a la TSS (esp0) 
@@ -182,10 +184,10 @@ void init_task1(void)
 	// NOTA: Inicialment la pila esta buida.
 	// NOTA: Aixo tambe ho fa el context_switch, pero com que aquest cas "init" inicia forzadament.
 	// OBS: Ho podem fer pq. (nosaltres com a programadors) sabem que sera el primer process en executar-se.
-	tss.esp0 = (DWord)&init_stack[KERNEL_STACK_SIZE-1];
+	tss.esp0 = (DWord)&init_stack[KERNEL_STACK_SIZE];
 
 	// Actualitzar MSR[0x175] (System Stack)
-	writeMSR(0x175, (unsigned int)&init_stack[KERNEL_STACK_SIZE-1]);
+	writeMSR(0x175, (unsigned int)&init_stack[KERNEL_STACK_SIZE]);
 
 	// Finalment assignem a cr3 la @T.D que fara servir "init".
 	set_cr3(get_DIR(init_pcb));
@@ -236,11 +238,11 @@ void inner_task_switch(union task_union* new_union)
 	set_cr3(get_DIR(new_pcb));
 
 	// Actualitzem en la TSS per si entrem amb int
-	tss.esp0 = (DWord)&new_union->stack[KERNEL_STACK_SIZE-1];
+	tss.esp0 = (DWord)&new_union->stack[KERNEL_STACK_SIZE];
 	
 	// Actualitzar el MSR[0x175] donat que fem servir sysenter 
 	// OBS: Nota que si no ho fiquessim i entres una interrupcio, no ho guardariem en la pila que toca.
-	writeMSR(0x175, (unsigned int)&new_union->stack[KERNEL_STACK_SIZE-1]);
+	writeMSR(0x175, (unsigned int)&new_union->stack[KERNEL_STACK_SIZE]);
 
 	// Acabar de fer el task_switch de vertitat
 	// NOTA: Veure implementacio de "end_task_switch" per a mes info.

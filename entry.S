@@ -163,6 +163,9 @@ sysenter_fin:
 	movl 12(%esp), %ecx
 	movl (%esp), %edx
 
-	# 9. Saltar user mod
+	# 9. Habilitar interrupcions
+	sti;  # NO OBLIDAR
+
+	# 10. Saltar user mod
 	# NOTA: No fem "iret" pq no hem entrat amb "int"
 	sysexit

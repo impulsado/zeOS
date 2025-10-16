@@ -118,7 +118,7 @@ void setIdt()
 void clock_routine(void)
 {
 	// 1. Call implemented routine
-	// zeos_show_clock();
+	zeos_show_clock();
 	
 	zeos_ticks++;
 }
@@ -162,7 +162,7 @@ void page_fault_routine_new(unsigned int error, unsigned int eip)
 	int i;
 	int hexa_act;
 
-        printk("\n Process generates a PAGE FAULT exception at EIP: 0x");
+  printk("\n Process generates a PAGE FAULT exception at EIP: 0x");
 
 	// Convert to hexa
 	for (i = 7; i >= 0; i--)

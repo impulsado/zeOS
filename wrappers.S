@@ -86,7 +86,7 @@ getTime_post_sysenter:
 	pop %ebp;  # restore ebp_wrapper
 	addl $4, %esp;  # Remove @getTime_post_sysenter
 	pop %ecx
-	pop %ebx
+	pop %edx
 
 	# Process the result
 	cmpl $0, %eax; # if (eax < 0) error
