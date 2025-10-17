@@ -49,14 +49,17 @@ ENTRY(end_task_switch)
 	# === Guardar current()->kernel_esp = %ebp
 	# Guardar reg. que farem servir
 	push %ebx
+	push %edx
 
 	# Obtindre el valor de ebp de inner_task_switch
 	movl (%ebp), %ebx
 
 	# Guardar-lo en la struct de current
-	movl %ebx, 8(%ebp)
+	movl 8(%ebp), %edx
+	movl %ebx, (%edx)
 
 	# Restaurar el reg.
+	pop %edx
 	pop %ebx
 
 	# === Actualitzar %esp = new_pcb->kernel_esp

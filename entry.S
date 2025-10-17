@@ -156,7 +156,6 @@ sysenter_fin:
 
 	# 7. Restaurem ctx hw
 	
-
 	# 8. Assignar valors a reg. per a sysexit
 	# ecx <-- @ user_esp
 	# edx <-- @ user_ret
