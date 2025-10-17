@@ -83,6 +83,7 @@ void cpu_idle(void)
 
 	printk("CPU is IDLE\n");
 
+
 	task_switch(&task[1]);
 	while(1)
 	{

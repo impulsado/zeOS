@@ -115,16 +115,38 @@ ENTRY(writeMSR)
 ENTRY(system_call_handler)
 	# 1. Guardar ctx hw
 	/*
+		PILA USUARI (actual)
+		-----------
 
-|	SS	| <- esp
-|ebp_user	| <- ebp
-|	@ret	|
-|user_data 	|
-| ...		|
+		| 	%ebp_wrapper	| <-- %ebp
+		|	@ret_wrapper	| +4
+		| 		%edx		|
+		|		%ecx 		|
+		|		 ...		|
+		|...................|
+		
+		
+		PILA SISTEMA (Que busquem)
+		------------
+		
+		| 		CTX. SW 	| <-- %esp
+		| 		EIP			|  # Volem que sigui @ret_wrapper donat que volem retornar al wrapper
+		|		DS			|
+		| 		PSW			|
+		|		ESP			|  # Volem que sigui el esp del la pila de l'usuari (per quan tornem al wrapper sapiguem on estava el top) 
+		|		SS			|
+		|-------------------| 
+
+		NOTA
+		----
+		%ebp de l''usuari no el perdem perque al retornar del sysexit fem un "pop %ebp" desfent el fake dynamic-link.
 	*/
 
 	push $__USER_DS;
-	push %ebp;  # Tot i que volem guardar esp, aquest ha augmentat amb el push previ. Pero recordem que ebp i esp, al fer dynamic-link --> apunten a la mateixa pos. inicialment
+	# OBS: Toca guardar esp, pero aquest ja apunta a pila de sistema (i volem la de l'usuari)
+	# Amb el canvi que hem fet (desde sysenter), %ebp no s'ha modificat i continua apuntant a la pila de l'usuari.
+	# Aprofitem que com que hem fet "fake dynamic-link" en el wrapper abans de saltar, %ebp apunta al top de la pila d'usuari (equival al %esp que volem guardar)
+	push %ebp;
 	pushfl;  # Guardar PSW
 	push $__USER_CS
 	push 4(%ebp);  # La proxima inst a executar es el "@ret" que s'ha guardat automaticament quan hem saltat al handler. Equival a la del wrapper
@@ -155,7 +177,9 @@ sysenter_fin:
 	RESTORE_ALL
 
 	# 7. Restaurem ctx hw
-	
+	# OBS: Aqui queda tota la informacio del Ctx. HW, pero no importa.
+	# El que passara es que com que MSR[0x175] apunta SEMPRE a la base de la pila de sistema, el proxim salt sobre escriurem el ctx. hw anterior
+
 	# 8. Assignar valors a reg. per a sysexit
 	# ecx <-- @ user_esp
 	# edx <-- @ user_ret
