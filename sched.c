@@ -81,10 +81,6 @@ void cpu_idle(void)
 {
 	__asm__ __volatile__("sti": : :"memory");
 
-	printk("CPU is IDLE\n");
-
-
-	task_switch(&task[1]);
 	while(1)
 	{
 	;

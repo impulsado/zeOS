@@ -84,7 +84,7 @@ void set_user_pages( struct task_struct *task )
 {
  int pag; 
  int new_ph_pag;
- page_table_entry * process_PT =  get_PT(task);
+ page_table_entry *process_PT = get_PT(task);
 
 
   /* CODE */

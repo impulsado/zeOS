@@ -12,6 +12,9 @@
 #define NR_TASKS      10
 #define KERNEL_STACK_SIZE	1024
 
+extern struct list_head freequeue;
+extern struct list_head readyqueue;
+
 enum state_t { ST_RUN, ST_READY, ST_BLOCKED };
 
 struct task_struct {
@@ -41,7 +44,7 @@ void init_idle(void);
 
 void init_sched(void);
 
-struct task_struct * current();
+struct task_struct *current();
 
 void task_switch(union task_union* new);
 

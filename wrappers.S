@@ -144,3 +144,46 @@ getpid_post_sysenter:
 getpid_no_error:
 	pop %ebp
 	ret
+
+
+ENTRY(fork)
+	# Dynamic Link
+	push %ebp
+	movl %esp, %ebp
+
+	# Save ECX, EDX
+	push %ecx
+	push %edx
+
+	# Select routine entry
+	movl $2, %eax
+
+	# Fake Dynamic Link
+	push $fork_post_sysenter
+	push %ebp
+	movl %esp, %ebp
+
+	# Entrar mode sistema
+	sysenter
+
+fork_post_sysenter:
+	# Restaurar pila
+	pop %ebp
+	addl $4, %esp
+	pop %edx
+	pop %ecx
+
+	# Comprovar return code
+	cmpl $0, %eax  # if (eax < 0) error
+	jge fork_no_error
+
+	# Assignar return code
+	negl %eax
+	movl %eax, errno
+	movl $-1, %eax
+
+fork_no_error:
+	
+	# Return
+	pop %ebp
+	ret

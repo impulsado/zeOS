@@ -121,12 +121,6 @@ void clock_routine(void)
 	zeos_show_clock();
 	
 	zeos_ticks++;
-
-  if (zeos_ticks == 50)
-  {
-    task_switch(&task[0]);
-    printk("INIT again");
-  }
 }
 
 void keyboard_routine(void)
