@@ -19,9 +19,13 @@ Register    gdtR;
 /* PAGING */
 /* Variables containing the page directory and the page table */
   
+// Vector de Pagines de Directory
+// NOTA: Nomes aprofitem dir_pages[p][0]
 page_table_entry dir_pages[NR_TASKS][TOTAL_PAGES]
   __attribute__((__section__(".data.task")));
 
+// Vector de Taules de Pagines
+// NOTA: Aqui si que aprofitem "totes" les pagines
 page_table_entry pagusr_table[NR_TASKS][TOTAL_PAGES]
   __attribute__((__section__(".data.task")));
 
@@ -67,7 +71,7 @@ for (j=0; j< NR_TASKS; j++) {
       // Logical page equal to physical page (frame)
       pagusr_table[j][i].bits.pbase_addr = i;
       pagusr_table[j][i].bits.rw = 1;
-      pagusr_table[j][i].bits.present = 1;
+      pagusr_table[j][i].bits.present = 1;  // NOTE: Perque sino donaria P.F. en una @ de kernel i aixo no pot passar.
     }
 }
 }
@@ -75,11 +79,12 @@ for (j=0; j< NR_TASKS; j++) {
 
 
 /* Initialize pages for initial process (user pages) */
+// NOTE: Aixo es nomes per al "init". Obs. que fem el alloc_frame() per CODE tambe (Es la primera vegada)
 void set_user_pages( struct task_struct *task )
 {
  int pag; 
  int new_ph_pag;
- page_table_entry * process_PT =  get_PT(task);
+ page_table_entry *process_PT = get_PT(task);
 
 
   /* CODE */

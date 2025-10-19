@@ -6,7 +6,8 @@
 #include <segment.h>
 #include <hardware.h>
 #include <io.h>
-
+#include <sched.h>  // For INITIAL_ESP
+#include <utils.h>  // For writeMSR
 #include <zeos_interrupt.h>
 
 Gate idt[IDT_ENTRIES];
@@ -15,17 +16,26 @@ Register    idtR;
 // IMPO: Com que aquesta funcio esta implementada en ASM i aixo es codi C
 // el pre-compilador ha de saber previament les funcions a fer servir perque el linker
 // ho relacioni amb la funcio escrita en ASM.
+void page_fault_handler_new(void);
 void clock_handler(void);
 void keyboard_handler(void);
+void system_call_handler(void);
+void writeMSR(unsigned int i, unsigned int low);
+
+
+// Ho definim aqui perque aixo es algo relacionat amb la interrupcio "getTime"
+// No te sentit definir-ho a un altre lloc (system.c) perque aquell fitxer nomes s'encarrega de cridar a wrappers, no fer coses d'interrupcions
+unsigned int zeos_ticks = 0;
+
 
 char char_map[] =
 {
   '\0','\0','1','2','3','4','5','6',
-  '7','8','9','0','\'','ก','\0','\0',
+  '7','8','9','0','\'','ยก','\0','\0',
   'q','w','e','r','t','y','u','i',
   'o','p','`','+','\0','\0','a','s',
-  'd','f','g','h','j','k','l','๑',
-  '\0','บ','\0','็','z','x','c','v',
+  'd','f','g','h','j','k','l','รฑ',
+  '\0','ยบ','\0','รง','z','x','c','v',
   'b','n','m',',','.','-','\0','*',
   '\0','\0','\0','\0','\0','\0','\0','\0',
   '\0','\0','\0','\0','\0','\0','\0','7',
@@ -89,16 +99,28 @@ void setIdt()
   set_handlers();
 
   /* ADD INITIALIZATION CODE FOR INTERRUPT VECTOR */
+  setInterruptHandler(14, page_fault_handler_new, 0);
   setInterruptHandler(32, clock_handler, 0); 
   setInterruptHandler(33, keyboard_handler, 0);
+  
+  // Lligar el handler general a la "int 0x80"
+  // NOTA: No ho volem en aquest cas perque fem sysenter --> fem us de MSR
+  //setTrapHandler(0x80, system_call_handler, 3);  // 3 pq les traps sempre venen de user mode
 
   set_idt_reg(&idtR);
+
+  // NOTA: Fico "(unsigned int)" per castejar. No doni errors i seguretat.
+  writeMSR(0x174, (unsigned int)__KERNEL_CS);
+  writeMSR(0x175, (unsigned int)INITIAL_ESP);
+  writeMSR(0x176, (unsigned int)system_call_handler);
 }
 
 void clock_routine(void)
 {
 	// 1. Call implemented routine
 	zeos_show_clock();
+	
+	zeos_ticks++;
 }
 
 void keyboard_routine(void)
@@ -129,4 +151,27 @@ void keyboard_routine(void)
 	// 3. Print screen
 	// (0x0, 0x0) --> Upper-left
 	printc_xy(0x0, 0x0, c);
+}
+
+// NOTE: Aixo es una exception, automaticament es guarda un codi d'error post al eip
+// Com que fem servir el truc d'accedir com si fos un parametre, haurem d'afegir-lo i que el tingui en compte el compilador.
+void page_fault_routine_new(unsigned int error, unsigned int eip)
+{
+	const char HEXA[] = "0123456789ABCDEF";
+	char dir[32/4 + 1];  // 32b / 4b (1 hexa) = 0xXXXXXXXX (8 X's) ;; +1 = '\0'
+	int i;
+	int hexa_act;
+
+  printk("\n Process generates a PAGE FAULT exception at EIP: 0x");
+
+	// Convert to hexa
+	for (i = 7; i >= 0; i--)
+	{
+		hexa_act = (eip >> 4*i) & 0x0F;  // Agafar els xxxx actual
+		dir[7-i] = HEXA[hexa_act];
+	}
+	dir[8] = '\0';
+
+	printk(dir);
+        while (1);
 }

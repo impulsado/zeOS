@@ -7,8 +7,9 @@
 
 #include <types.h>
 
-
+extern unsigned int zeos_ticks;
 extern TSS         tss;
 extern Descriptor* gdt;
+
 
 #endif  /* __SYSTEM_H__ */

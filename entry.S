@@ -4,6 +4,7 @@
 
 #include <asm.h>
 #include <segment.h>
+#include <errno.h>
 
 /**************************************************/
 /**** Save & Restore ******************************/
@@ -72,18 +73,18 @@ ENTRY(clock_handler)
 	Aqui el HW ja ha guardat els REG automaticament del cntx HW 
 	*/
 
-	// 1. Guardar contexte SW
+	# 1. Guardar contexte SW
 	SAVE_ALL
 	
-	// 2. Habilitar interrupcions pq ja les estem tractant
+	# 2. Habilitar interrupcions pq ja les estem tractant
 	EOI
 
 	call clock_routine
 
-	// 3. Recuperar contexte sw
+	# 3. Recuperar contexte sw
 	RESTORE_ALL
 		
-	// 4. Saltar de system mode a user mode
+	# 4. Saltar de system mode a user mode
 	iret
 
 ENTRY(keyboard_handler)
@@ -92,3 +93,102 @@ ENTRY(keyboard_handler)
 	EOI
 	RESTORE_ALL
 	iret
+
+ENTRY(page_fault_handler_new)
+	call page_fault_routine_new
+	iret;  # Tot i que aixo no passara
+
+ENTRY(writeMSR)
+	# MSR[ecx] <-- edx:eax (Com que estem en 32b --> edx = 0)
+	push %ebp
+	movl %esp, %ebp
+
+	movl 8(%ebp), %ecx;  # ecx <-- param1 = number of the MSR
+	movl 12(%ebp), %eax;  # eax <-- param2 = value of MSR
+	movl $0, %edx
+
+	wrmsr
+
+	popl %ebp
+	ret
+
+ENTRY(system_call_handler)
+	# 1. Guardar ctx hw
+	/*
+		PILA USUARI (actual)
+		-----------
+
+		| 	%ebp_wrapper	| <-- %ebp
+		|	@ret_wrapper	| +4
+		| 		%edx		|
+		|		%ecx 		|
+		|		 ...		|
+		|...................|
+		
+		
+		PILA SISTEMA (Que busquem)
+		------------
+		
+		| 		CTX. SW 	| <-- %esp
+		| 		EIP			|  # Volem que sigui @ret_wrapper donat que volem retornar al wrapper
+		|		DS			|
+		| 		PSW			|
+		|		ESP			|  # Volem que sigui el esp del la pila de l'usuari (per quan tornem al wrapper sapiguem on estava el top) 
+		|		SS			|
+		|-------------------| 
+
+		NOTA
+		----
+		%ebp de l''usuari no el perdem perque al retornar del sysexit fem un "pop %ebp" desfent el fake dynamic-link.
+	*/
+
+	push $__USER_DS;
+	# OBS: Toca guardar esp, pero aquest ja apunta a pila de sistema (i volem la de l'usuari)
+	# Amb el canvi que hem fet (desde sysenter), %ebp no s'ha modificat i continua apuntant a la pila de l'usuari.
+	# Aprofitem que com que hem fet "fake dynamic-link" en el wrapper abans de saltar, %ebp apunta al top de la pila d'usuari (equival al %esp que volem guardar)
+	push %ebp;
+	pushfl;  # Guardar PSW
+	push $__USER_CS
+	push 4(%ebp);  # La proxima inst a executar es el "@ret" que s'ha guardat automaticament quan hem saltat al handler. Equival a la del wrapper
+
+	# 2. Guardar ctx sw
+	SAVE_ALL	
+	
+	# 3. Comprovar entrada (eax)
+	cmpl $0, %eax;  # if (eax < 0) jump 
+	jl invalid_eax
+
+	cmpl $MAX_SYSCALL, %eax;  # if (eax > MAX_SYSCALL) jump
+	jg invalid_eax
+
+	# 4. Saltar a la rutina 
+	call *sys_call_table(,%eax,0x04);  # '*' --> Saltar a la @ que hi ha dins. Fer valor del punter.
+	jmp sysenter_fin
+	
+invalid_eax:
+	movl $-ENOSYS, %eax;
+sysenter_fin:
+	# 5. Guardar el valor de retorn al ctx sw
+	# NOTA: No ho podem fer despres pq. sino perderem l'actual eax fent "pop eax" (RESTORE_ALL)
+	# NOTA: Dibuixar pila per saber la pos.
+	movl %eax, 24(%esp)
+
+	# 6. Restaurem ctx sw
+	RESTORE_ALL
+
+	# 7. Restaurem ctx hw
+	# OBS: Aqui queda tota la informacio del Ctx. HW, pero no importa.
+	# El que passara es que com que MSR[0x175] apunta SEMPRE a la base de la pila de sistema, el proxim salt sobre escriurem el ctx. hw anterior
+
+	# 8. Assignar valors a reg. per a sysexit
+	# ecx <-- @ user_esp
+	# edx <-- @ user_ret
+	movl 12(%esp), %ecx
+	movl (%esp), %edx
+
+	# 9. Habilitar interrupcions
+	sti;  # NO OBLIDAR
+
+	# 10. Saltar user mod
+	# NOTA: No fem "iret" pq no hem entrat amb "int"
+	sysexit

@@ -72,6 +72,5 @@ void printk(char *string)
   	for (i = 0; string[i]; i++)
   	{
 		printc(string[i]);
-		printc_color(0x0E);  // Yellow
   	}
 }

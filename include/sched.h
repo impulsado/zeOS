@@ -12,16 +12,22 @@
 #define NR_TASKS      10
 #define KERNEL_STACK_SIZE	1024
 
+extern struct list_head freequeue;
+extern struct list_head readyqueue;
+
 enum state_t { ST_RUN, ST_READY, ST_BLOCKED };
 
 struct task_struct {
   int PID;			/* Process ID. This MUST be the first field of the struct. */
-  page_table_entry * dir_pages_baseAddr;
+  page_table_entry *dir_pages_baseAddr;
+  DWord kernel_esp;
+  struct list_head list; //This is the anchor in the list
+
 };
 
 union task_union {
   struct task_struct task;
-  unsigned long stack[KERNEL_STACK_SIZE];    /* pila de sistema, per procés */
+  DWord stack[KERNEL_STACK_SIZE];    /* pila de sistema, per procés */
 };
 
 extern union task_union task[NR_TASKS]; /* Vector de tasques */
@@ -38,11 +44,13 @@ void init_idle(void);
 
 void init_sched(void);
 
-struct task_struct * current();
+struct task_struct *current();
 
-void task_switch(union task_union*t);
+void task_switch(union task_union* new);
 
 struct task_struct *list_head_to_task_struct(struct list_head *l);
+union task_union *list_head_to_task_union(struct list_head *l);
+
 
 int allocate_DIR(struct task_struct *t);
 
