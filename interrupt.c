@@ -121,6 +121,8 @@ void clock_routine(void)
 	zeos_show_clock();
 	
 	zeos_ticks++;
+
+  scheduler();
 }
 
 void keyboard_routine(void)

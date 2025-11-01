@@ -11,6 +11,7 @@
 
 #define NR_TASKS      10
 #define KERNEL_STACK_SIZE	1024
+#define DEFAULT_QUANTUM 3
 
 extern struct list_head freequeue;
 extern struct list_head readyqueue;
@@ -21,6 +22,7 @@ struct task_struct {
   int PID;			/* Process ID. This MUST be the first field of the struct. */
   page_table_entry *dir_pages_baseAddr;
   DWord kernel_esp;
+  int quantum;
   struct list_head list; //This is the anchor in the list
 
 };
@@ -63,5 +65,10 @@ void sched_next_rr();
 void update_process_state_rr(struct task_struct *t, struct list_head *dest);
 int needs_sched_rr();
 void update_sched_data_rr();
+
+void scheduler(void);
+
+int get_quantum(struct task_struct *t);
+void set_quantum(struct task_struct *t, int new_quantum);
 
 #endif  /* __SCHED_H__ */

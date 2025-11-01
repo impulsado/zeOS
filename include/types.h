@@ -157,7 +157,7 @@ typedef union
     No guarda @, guarda identificadors (Per poder fer "<<12 | offset")
     Apunta al "seguent" espai de memoria important:
     - Si es de la PD --> Apunta a PT
-    - Si es de la PT --> Apunta a frame fisic
+    - Si es de la PT --> Identificador de frame fisic
 */
 
 #endif  /* __TYPES_H__ */

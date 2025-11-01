@@ -25,6 +25,8 @@ struct list_head readyqueue;
 
 struct task_struct *idle_task;
 
+int actual_quantum;
+
 void end_task_switch(unsigned long *kernel_esp_of_current, unsigned int new_esp_value);
 
 struct task_struct *list_head_to_task_struct(struct list_head *l)
@@ -111,6 +113,7 @@ void init_idle (void)
 
 	// Asignar PID
 	idle_pcb->PID = 0;
+	idle_pcb->quantum = DEFAULT_QUANTUM;
 
 	// Assignar la P.D. corresponent
 	allocate_DIR(idle_pcb);
@@ -145,6 +148,7 @@ void init_task1(void)
 
 	// Assignar PID
 	init_pcb->PID = 1;
+	init_pcb->quantum = DEFAULT_QUANTUM;
 
 	// Assignar la P.D. corresponent
 	allocate_DIR(init_pcb);
@@ -265,4 +269,77 @@ void task_switch(union task_union* new)
 		"pop %esi; \n"
 		"pop %edi; \n"
 	);
+}
+
+void sched_next_rr()
+{
+	union task_union *pnext_process_union = (union task_union *)idle_task;  // Default IDLE
+
+	if (!list_empty(&readyqueue))
+	{
+		struct list_head *pnext_process;
+		
+		// Get the top process
+		pnext_process = list_first(&readyqueue);
+		list_del(pnext_process);
+		pnext_process_union = list_head_to_task_union(pnext_process);
+	}
+
+	actual_quantum = get_quantum((struct task_struct *)pnext_process_union);
+	task_switch(pnext_process_union);
+}
+
+void update_process_state_rr(struct task_struct *t, struct list_head *dest)
+{
+	// === Base Case (if null --> dont change) 
+	if (dest == 0)
+		return;
+
+	// === General Case
+	list_add_tail(&(t->list), dest);
+}
+
+int needs_sched_rr()
+{
+	if (actual_quantum <= 0)
+		return 1;
+
+	return 0;
+}
+
+void update_sched_data_rr()
+{
+	actual_quantum--;
+}
+
+void scheduler()
+{
+	int idle_is_current = (current()->PID == 0);
+	int must_change = 1;
+	
+	// 1. Actualitzar estat sigui quin sigui
+	update_sched_data_rr();
+
+	// 2. Si IDLE no es current, mirar si a l'actual se li ha acabat el quantum
+	if (!idle_is_current)
+		must_change = needs_sched_rr();
+
+	// 3.1. Si no hi ha disponibles o a l'actual no se li ha acabat quantum --> Continuar igual
+	// IMPO: Si no fem aixo, saltar a mode usuari no te el quantum suficient i es reinicia.
+	if ((idle_is_current && list_empty(&readyqueue)) || (!must_change))
+		return;
+	
+	// 4. S'ha de fer canvi
+	update_process_state_rr(current(), &readyqueue);
+	sched_next_rr();
+}
+
+int get_quantum(struct task_struct *t)
+{
+	return t->quantum;
+}
+
+void set_quantum(struct task_struct *t, int new_quantum)
+{
+	t->quantum = new_quantum;
 }

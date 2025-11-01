@@ -1,0 +1,41 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "(gdb) Debug ZeOS",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/system",
+            "args": [],
+            "stopAtEntry": true,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Connect to Bochs GDB stub",
+                    "text": "target remote localhost:1234",
+                    "ignoreFailures": false
+                },
+                {
+                    "description": "Set architecture to i386",
+                    "text": "set architecture i386",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Load symbol file",
+                    "text": "symbol-file ${workspaceFolder}/system",
+                    "ignoreFailures": false
+                }
+            ],
+            "preLaunchTask": "start-bochs"
+        }
+    ]
+}

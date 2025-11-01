@@ -95,10 +95,6 @@ int __attribute__((__section__(".text.main")))
   /* Move user code/data now (after the page table initialization) */
   copy_data((void *) KERNEL_START + *p_sys_size, (void*)L_USER_START, *p_usr_size);
 
-
-  struct task_struct *temp = current();
-  temp->PID = 0;
-
   printk("Entering user mode...");
 
   enable_int();

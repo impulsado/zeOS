@@ -16,8 +16,20 @@ int __attribute__ ((__section__(".text.main"))) main(void)
 	int pid = fork();
 	itoa(pid, buf);
 
-	write(1, "PID actual: ", 12);
-	write(1, buf, 4);
+	if (pid == 0)
+	{
+		while (1)
+		{
+			write(1, "Soc fill\n", 9);
+		}
+	}
+	else
+	{
+		while (1)
+		{
+			write(1, "Soc pare\n", 10);
+		}
+	}
 
   	while (1);
 }

@@ -196,7 +196,7 @@ int sys_fork()
 	// 7. Assignem un PID al fill
 	// IMPO: Si no fiquem 1000 pot colisionar amb el pid de init (1)
 	child_task->PID = 1000 + zeos_ticks;  // Pot ser un pseudoaleatori
-
+	child_task->quantum = DEFAULT_QUANTUM;
 	// 8. Actualitzem reg. necessaris
 	// No se a que es refereix el document.
 
@@ -211,7 +211,7 @@ int sys_fork()
 		Finalment haurem d'actualitzar el kernel_esp del fill perque apunti a la direccio correcta (el task_switch ho necessita)
 		
 		|			%ebp_trash		|
-		|		@ret_from_fork		|
+		|		@ret_from_fork		|  Aqui %ebp de sys_fork
 		|	@ret_sysenter_handler	| (1)
 		| 			Ctx. SW 		| (11)
 		|			Ctx. HW			| (5)

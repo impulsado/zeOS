@@ -1,0 +1,33 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build-zeos",
+            "type": "shell",
+            "command": "make",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "start-bochs",
+            "type": "shell",
+            "command": "bochs -q -f .bochsrc_gdb",
+            "isBackground": true,
+            "problemMatcher": {
+                "pattern": {
+                    "regexp": "^Waiting for gdb connection on port (\\d+)$",
+                    "line": 1
+                },
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": "^========================================================================$",
+                    "endsPattern": "^Waiting for gdb connection"
+                }
+            },
+            "dependsOn": ["build-zeos"]
+        }
+    ]
+}
