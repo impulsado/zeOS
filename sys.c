@@ -118,8 +118,6 @@ int sys_fork()
 		set_ss_pag(child_PT, PAG_LOG_INIT_DATA+i, free_frames[i]);
 	}
 
-
-
 	// 6. Mapejar frames DATA+STACK de pare --> fill
 	/*
 		TEORIA
@@ -155,7 +153,6 @@ int sys_fork()
 		RECORDA: Tot i que estem iterant la part de DATA+STACK [0] --> [NUM_PAG_DATA], en realitat [NUM_PAG_DATA] es el bottom.
 	*/
 
-	
 	int PAG_LOG_INIT_FREE = PAG_LOG_INIT_CODE + NUM_PAG_CODE;
 
 	for (int i = 0; i < NUM_PAG_DATA; i++)
@@ -190,13 +187,22 @@ int sys_fork()
 		del_ss_pag(father_PT, PAG_LOG_INIT_FREE+i);
 	}
 
-	set_cr3(get_DIR(child_task));
-	set_cr3(get_DIR(father_task));  // Perque volem reiniciar. No saltar a fill
+	// Reiniciar la TLB
+	// IMPO: NO volem saltar a fill, aixi que volem que cr3 continu apuntant al pare
+	set_cr3(get_DIR(father_task));
 
-	// 7. Assignem un PID al fill
+	// 7. Gestionem al fill
 	// IMPO: Si no fiquem 1000 pot colisionar amb el pid de init (1)
+	// 7.1. PID
 	child_task->PID = 1000 + zeos_ticks;  // Pot ser un pseudoaleatori
+	
+	// 7.2. RR
 	child_task->quantum = DEFAULT_QUANTUM;
+
+	// 7.3. Hierarchy
+	child_task->father = father_task;
+	INIT_LIST_HEAD(&child_task->child_list);
+
 	// 8. Actualitzem reg. necessaris
 	// No se a que es refereix el document.
 
@@ -226,12 +232,63 @@ int sys_fork()
 	// NOTA: Recorda que scheduler estem fent FIFO --> Afegir al final
 	list_add_tail(pchild, &readyqueue);
 
-	// 11. Retornem PID del fill
+	// 11. Assignem a pare el nou fill
+	list_add_tail(&child_task->child_node, &father_task->child_list);
+
+	// 12. Retornem PID del fill
 	return child_task->PID;
 }
 
-void sys_exit()
-{  
+void sys_exit(void)
+{
+	// Treure frames (USER) del process
+	// TODO: Es podria fer que nomes anes a les DATA i CODE
+	for (unsigned int i = NUM_PAG_KERNEL; i < TOTAL_PAGES; i++)
+	{
+		free_frame(i);
+	}
+
+	// Gestionar els fills
+	struct list_head *plist_child;
+	struct list_head *aux;  // Per a list_for_each_safe
+	struct list_head *current_childs = &(current()->child_list);
+	
+	if (!list_empty(current_childs))
+	{
+		struct task_struct *child_task;
+		struct task_struct *pnew_father;
+
+		// Determinar qui es el nou pare
+		if (current()->father == current())
+			pnew_father = &idle_task;
+		else
+			pnew_father = current()->father;
+
+		// Canviar de pare als fills de la generacio mes proxima
+		// IMPO: Usar list_for_each_safe perque estem modificant la llista
+		list_for_each_safe(plist_child, aux, current_childs) 
+		{
+			// Obtenir el task_struct del fill
+			// IMPO: Obtenir des del node corresponent a la llista de fills
+			child_task = list_entry(plist_child, struct task_struct, child_node);
+
+			// 1. Treure el fill de la llista del current
+			list_del(plist_child);
+
+			// 2. Assignar el nou pare al fill
+			child_task->father = pnew_father;
+
+			// 3. Afegir el fill a la llista de fills del nou pare
+			list_add_tail(plist_child, &(pnew_father->child_list));
+		}
+	}
+
+	// Encolar PCB de current (que es el que s'esta fent exit) a freequeue
+	list_add_tail(&(current()->list), &freequeue);
+
+	// Cridar al scheduler
+	// NOTA: Aixi forcem assignar un nou process automaticament
+	sched_next_rr();
 }
 
 int sys_write(int fd, char *buffer, int size)

@@ -15,25 +15,41 @@
 
 extern struct list_head freequeue;
 extern struct list_head readyqueue;
+extern struct task_struct idle_task;
 
 enum state_t { ST_RUN, ST_READY, ST_BLOCKED };
 
-struct task_struct {
+struct task_struct 
+{
+  //=== General
   int PID;			/* Process ID. This MUST be the first field of the struct. */
   page_table_entry *dir_pages_baseAddr;
   DWord kernel_esp;
+  
+  //=== RR
   int quantum;
-  struct list_head list; //This is the anchor in the list
 
+  //=== Hierarchy
+  struct task_struct *father;
+  struct list_head child_list;
+  struct list_head child_node;  // node dins la llista de fills
+
+  //=== State
+  int pending_blocks;
+
+  //=== List
+  // IMPO: Un node MAI pot estar en dues llistes a l'hora --> Node per llista
+  // OBS:  Nosaltres sabrem que no podra estar en {ready,free}queue a la vegada
+  struct list_head list;  // node en la llista {readyqueue, freequeue}
 };
 
-union task_union {
+union task_union 
+{
   struct task_struct task;
   DWord stack[KERNEL_STACK_SIZE];    /* pila de sistema, per procés */
 };
 
 extern union task_union task[NR_TASKS]; /* Vector de tasques */
-
 
 #define KERNEL_ESP(t)       	(DWord) &(t)->stack[KERNEL_STACK_SIZE]
 
@@ -61,10 +77,10 @@ page_table_entry * get_PT (struct task_struct *t) ;
 page_table_entry * get_DIR (struct task_struct *t) ;
 
 /* Headers for the scheduling policy */
-void sched_next_rr();
+void sched_next_rr(void);
 void update_process_state_rr(struct task_struct *t, struct list_head *dest);
-int needs_sched_rr();
-void update_sched_data_rr();
+int needs_sched_rr(void);
+void update_sched_data_rr(void);
 
 void scheduler(void);
 

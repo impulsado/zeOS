@@ -25,10 +25,8 @@ int __attribute__ ((__section__(".text.main"))) main(void)
 	}
 	else
 	{
-		while (1)
-		{
-			write(1, "Soc pare\n", 10);
-		}
+		write(1, "Soc pare\n", 10);
+		exit();
 	}
 
   	while (1);

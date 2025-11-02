@@ -23,7 +23,7 @@ extern struct list_head blocked;
 struct list_head freequeue;
 struct list_head readyqueue;
 
-struct task_struct *idle_task;
+struct task_struct idle_task;
 
 int actual_quantum;
 
@@ -113,7 +113,6 @@ void init_idle (void)
 
 	// Asignar PID
 	idle_pcb->PID = 0;
-	idle_pcb->quantum = DEFAULT_QUANTUM;
 
 	// Assignar la P.D. corresponent
 	allocate_DIR(idle_pcb);
@@ -129,8 +128,16 @@ void init_idle (void)
 	// NOTA: Apunta al ebp pq. context_switch() ho necessita per desempilar.
 	idle_pcb->kernel_esp = (DWord)&idle_stack[KERNEL_STACK_SIZE-2];
 
+	// RR
+	idle_pcb->quantum = DEFAULT_QUANTUM;
+
+	// Hierarchy
+	idle_pcb->father = idle_pcb;  // Es ell mateix (Tampoc morira com a tal)
+	INIT_LIST_HEAD(&idle_pcb->child_list);  // Inicialment empty
+	INIT_LIST_HEAD(&idle_pcb->child_node);  // No esta en cap llista 
+
 	// Guardar globalment per millor gestio
-	idle_task = idle_pcb;
+	idle_task = *idle_pcb;
 }
 
 void init_task1(void)
@@ -148,7 +155,6 @@ void init_task1(void)
 
 	// Assignar PID
 	init_pcb->PID = 1;
-	init_pcb->quantum = DEFAULT_QUANTUM;
 
 	// Assignar la P.D. corresponent
 	allocate_DIR(init_pcb);
@@ -193,6 +199,14 @@ void init_task1(void)
 
 	// Finalment assignem a cr3 la @T.D que fara servir "init".
 	set_cr3(get_DIR(init_pcb));
+
+	// RR
+	init_pcb->quantum = DEFAULT_QUANTUM;
+
+	// Hierarchy
+	init_pcb->father = init_pcb;  // Es ell mateix
+	INIT_LIST_HEAD(&init_pcb->child_list);  // Inicialment empty
+	INIT_LIST_HEAD(&init_pcb->child_node);  // No esta en cap llista 
 
 	/*
 	OBSERVACIO
@@ -271,9 +285,9 @@ void task_switch(union task_union* new)
 	);
 }
 
-void sched_next_rr()
+void sched_next_rr(void)
 {
-	union task_union *pnext_process_union = (union task_union *)idle_task;  // Default IDLE
+	union task_union *pnext_process_union = (union task_union *)&idle_task;  // Default IDLE
 
 	if (!list_empty(&readyqueue))
 	{
@@ -299,7 +313,7 @@ void update_process_state_rr(struct task_struct *t, struct list_head *dest)
 	list_add_tail(&(t->list), dest);
 }
 
-int needs_sched_rr()
+int needs_sched_rr(void)
 {
 	if (actual_quantum <= 0)
 		return 1;
@@ -307,12 +321,12 @@ int needs_sched_rr()
 	return 0;
 }
 
-void update_sched_data_rr()
+void update_sched_data_rr(void)
 {
 	actual_quantum--;
 }
 
-void scheduler()
+void scheduler(void)
 {
 	int idle_is_current = (current()->PID == 0);
 	int must_change = 1;
@@ -324,13 +338,19 @@ void scheduler()
 	if (!idle_is_current)
 		must_change = needs_sched_rr();
 
-	// 3.1. Si no hi ha disponibles o a l'actual no se li ha acabat quantum --> Continuar igual
-	// IMPO: Si no fem aixo, saltar a mode usuari no te el quantum suficient i es reinicia.
-	if ((idle_is_current && list_empty(&readyqueue)) || (!must_change))
+    // 3.1. Si no hi ha disponibles --> Continuar igual
+    if (list_empty(&readyqueue))
+		return;
+    
+    // 3.2. Si a l'actual no se li ha acabat quantum --> Continuar igual
+    if (!must_change)
 		return;
 	
-	// 4. S'ha de fer canvi
-	update_process_state_rr(current(), &readyqueue);
+    // 4. S'ha de fer canvi
+    // IMPO: IDLE no va a readyqueue
+    if (!idle_is_current)
+		update_process_state_rr(current(), &readyqueue);
+
 	sched_next_rr();
 }
 

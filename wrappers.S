@@ -65,6 +65,7 @@ write_no_error:
 	popl %ebp
 	ret  # Retornar a user code 
 
+
 ENTRY(gettime)
 	# Dynamic Link
 	push %ebp
@@ -108,6 +109,7 @@ getTime_no_error:
 	pop %ebp;  # restore ebp_user_prog
 	ret;  # goto usr_prog
 	
+
 ENTRY(getpid)
 	# Dynamic link
 	push %ebp
@@ -185,5 +187,46 @@ fork_post_sysenter:
 fork_no_error:
 	
 	# Return
+	pop %ebp
+	ret
+
+
+ENTRY(exit)
+	# Dynamic link
+	push %ebp
+	movl %esp, %ebp
+
+	# Save ECX, EDX
+	push %ecx
+	push %edx
+
+	# Assign syscall code
+	mov $1, %eax
+
+	# Crear fake-dynamic link
+	push $exit_post_sysenter
+	push %ebp
+	movl %esp, %ebp
+
+	# Saltar
+	sysenter
+
+exit_post_sysenter:
+	# Restaurar pila
+	pop %ebp
+	addl $4, %esp
+	pop %edx
+	pop %ecx
+
+	# Comprovar codi error
+	cmpl $0, %eax  # if (eax < 0) errno
+	jge exit_no_error
+
+	# Assignar return code
+	negl %eax
+	movl %eax, errno
+	movl $-1, %eax
+
+exit_no_error:
 	pop %ebp
 	ret
