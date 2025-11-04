@@ -13,6 +13,7 @@
 #define ESCRIPTURA 1
 
 extern unsigned int zeos_ticks;
+extern struct list_head blocked;
 
 // https://android.googlesource.com/kernel/lk/+/dima/for-travis/include/errno.h
 
@@ -230,6 +231,7 @@ int sys_fork()
 
 	// 10. Fiquem al fill en readyqueue perque el scheduler ja el comenci a tindre en compte
 	// NOTA: Recorda que scheduler estem fent FIFO --> Afegir al final
+	child_task->state = ST_READY;
 	list_add_tail(pchild, &readyqueue);
 
 	// 11. Assignem a pare el nou fill
@@ -336,4 +338,62 @@ int sys_write(int fd, char *buffer, int size)
 int sys_gettime(void)
 {
 	return zeos_ticks;
+}
+
+void sys_block(void)
+{
+	//=== Base Case
+	if (current()->PID == 0)
+		return;
+
+	if (current()->pending_unblocks > 0)
+	{
+		current()->pending_unblocks--;
+		return;
+	}
+
+	//=== General Case 
+	struct list_head *pcurrent_list = &current()->list; 
+	list_del(pcurrent_list);  // Remove from readyqueue
+	current()->state = ST_BLOCKED;
+	list_add_tail(pcurrent_list, &blocked);  // Add to blockedqueue
+	sched_next_rr();  // Per anar mes rapids
+}
+
+int sys_unblock(int pid)
+{
+	//=== Base Case
+	// 1. Comprovar que el pid sigui fill de current
+	struct task_struct *pchild_task = 0;
+	struct list_head *aux_list;
+	struct task_struct *aux_task;
+
+	list_for_each(aux_list, &current()->child_list)
+	{
+        aux_task = list_entry(aux_list, struct task_struct, child_node);
+		if (aux_task->PID == pid)
+		{
+			pchild_task = aux_task;
+			break;
+		}
+	}
+
+	if (pchild_task == 0)
+		return -1;
+
+	//=== General Case
+	// 2. Gestionar accio amb el fill
+	// 2.1. Si no esta blocked --> "No fer res"
+	if (pchild_task->state != ST_BLOCKED)
+	{
+		pchild_task->pending_unblocks++;
+		return 0;
+	}
+
+	// 2.2. Esta blocked --> Volem unblock
+	list_del(&(pchild_task->list));  // Treure de blockedqueue
+	pchild_task->state = ST_READY;
+	list_add_tail(&(pchild_task->list), &readyqueue);  //  Afegir de blockedqueue
+	
+	return 0;
 }

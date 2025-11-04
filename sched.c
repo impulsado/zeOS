@@ -136,6 +136,9 @@ void init_idle (void)
 	INIT_LIST_HEAD(&idle_pcb->child_list);  // Inicialment empty
 	INIT_LIST_HEAD(&idle_pcb->child_node);  // No esta en cap llista 
 
+	// Sempahore
+	idle_pcb->state = ST_READY;
+
 	// Guardar globalment per millor gestio
 	idle_task = *idle_pcb;
 }
@@ -207,6 +210,9 @@ void init_task1(void)
 	init_pcb->father = init_pcb;  // Es ell mateix
 	INIT_LIST_HEAD(&init_pcb->child_list);  // Inicialment empty
 	INIT_LIST_HEAD(&init_pcb->child_node);  // No esta en cap llista 
+	
+	// Sempahore
+	init_pcb->state = ST_READY;
 
 	/*
 	OBSERVACIO
@@ -299,7 +305,11 @@ void sched_next_rr(void)
 		pnext_process_union = list_head_to_task_union(pnext_process);
 	}
 
+	// RR
 	actual_quantum = get_quantum((struct task_struct *)pnext_process_union);
+
+	// Semaphore
+	pnext_process_union->task.state = ST_RUN;
 	task_switch(pnext_process_union);
 }
 
@@ -349,7 +359,10 @@ void scheduler(void)
     // 4. S'ha de fer canvi
     // IMPO: IDLE no va a readyqueue
     if (!idle_is_current)
+	{
+		current()->state = ST_READY;
 		update_process_state_rr(current(), &readyqueue);
+	}
 
 	sched_next_rr();
 }

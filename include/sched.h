@@ -34,8 +34,9 @@ struct task_struct
   struct list_head child_list;
   struct list_head child_node;  // node dins la llista de fills
 
-  //=== State
-  int pending_blocks;
+  //=== Semaphore
+  enum state_t state;
+  unsigned int pending_unblocks;
 
   //=== List
   // IMPO: Un node MAI pot estar en dues llistes a l'hora --> Node per llista
