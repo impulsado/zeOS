@@ -41,8 +41,6 @@ int ret_from_fork(void)
 
 int sys_fork()
 {
-	// TODO: Podriem optimitzar aquesta funcio per fer rollback en cas de fallada de algo
-
 	// 0. Variables
 	struct task_struct *father_task;
 	struct task_struct *child_task;
@@ -77,14 +75,25 @@ int sys_fork()
 	for (int i = 0; i < NUM_PAG_DATA; i++)
 	{
 		free_frames[i] = alloc_frame();
-		if (free_frames[i] == -1)
-			return -ENOMEM;
+		if (free_frames[i] != -1)
+			continue;
+
+		// 4.1. Hi ha hagut error --> Fer rollback
+		// Alliberar frames
+		for (int j = 0; j < i; j++)
+		{
+			free_frame(free_frames[j]);
+		}
+
+		// Retornar PCB
+		list_add_tail(pchild, &freequeue);
+
+		return -ENOMEM;
 	}
 
 	/*
 		IMPORTANT
 		---------
-
 		Tot i que el fill sigui una copia del pare, la nova P.D./P.T. es completament invalida (No sabem que tenia abans)
 		Si que veiem que modificarem les entrades de DATA+STACK, pero les altres entrades han d'estar actualitzades tambe.
 		Aixo fa que haguem de forçar al fill que apunti a mateixos frames de memoria que el pare en cas de KERNEL+CODE
@@ -98,22 +107,28 @@ int sys_fork()
 	father_PT = get_PT(father_task);
 	child_PT = get_PT(child_task);
 
-	for (int i = 0; i < NUM_PAG_KERNEL; i++)
-	{
-		set_ss_pag(child_PT, i, father_PT[i].bits.pbase_addr);
-	}
+	/*
+		RECORDA
+		-------
+		Dins de "init_table_pages()" ja fem mapping de les entrades kernel a totes les T.P.
+		No fa falta fer-ho ara
 
+		for (int i = 0; i < NUM_PAG_KERNEL; i++)
+		{
+			set_ss_pag(child_PT, i, father_PT[i].bits.pbase_addr);
+		}
+	*/
+
+	// Copiar les entrades de CODE de pare --> fill
 	for (int i = 0; i < NUM_PAG_CODE; i++)
 	{
-		set_ss_pag(child_PT, PAG_LOG_INIT_CODE+i, father_PT[PAG_LOG_INIT_CODE+i].bits.pbase_addr);
+		set_ss_pag(child_PT, PAG_LOG_INIT_CODE+i, 
+					father_PT[PAG_LOG_INIT_CODE+i].bits.pbase_addr);
 	}
-	
 
 	// 5. Assignar al fill aquesta nous frames obtinguts perque els faci servir a la seva regio de DATA+STACK
-	// NOTA: Aixo implicara sobreescriure les entrades de la TP corresponents a DATA+STACK (perque ara apunten a pare)
-	// NOTA: Faig servir PAG_LOG_INIT_DATA pq. replico "set_user_pages()".
+	// NOTA: Aixo implicara sobreescriure les entrades de la TP corresponents a DATA+STACK (perque ara apunten a frames fisics de pare)
 	// OBS: En free_frames[i] guardem els id. dels frames fisics. 
-	// Posteriorment els farem <<12 per a que apuntin correctament i poder fer un OR amb el offset
 	for (int i = 0; i < NUM_PAG_DATA; i++)
 	{
 		set_ss_pag(child_PT, PAG_LOG_INIT_DATA+i, free_frames[i]);
@@ -164,8 +179,12 @@ int sys_fork()
 	/*
 		IMPORTANT
 		---------
-		copy_data() treballa amb punters a direccions de memoria.
-		No tenim un punter a direccio de memoria --> L'haurem de crear
+		Idea del que volem fer: "Guardar el que hi hagi en el frame fisic PT[i] --> PT[j]" 
+		Pero donat que PT treballa amb direccions fisiques, no podem fer-ho tal qual.
+		La solucio esta en forçar que hi hagi la traduccio corresponent per accedir a l'entrada 'i' i 'j'.
+		Aixo ho aconseguim ficant en els bits corresponents de "TABLE" el 'i' i 'j'.
+		
+		copy_data() treballa amb punters a direccions de memoria logica.
 		
 		31			21		11		 0
 		|-----------|-------|--------|
@@ -173,11 +192,15 @@ int sys_fork()
 		|----------------------------|
 
 		Amb aquesta direccio la MMU agafa els bits corresponents per accedir a les estructures i fer la traduccio.
-		La traduccio com a tal la fa agafant la pbase_addr de la entrada TABLE[i].
+		La traduccio com a tal la fa agafant la pbase_addr de la entrada TABLE[i] i fer "pbase_addr<< 12 | offset".
+		Simplement fa falta ficar entre els bits 21-11 el num. d'entrada de la T.P que s'ha de fer servir
+		
+		NOTA
+		----
 		Sabem que "DIRECTORY = 0" SEMPRE perque nomes fem servir la primera entrada (la 0)
 		Sabem que offset 0 perque estem copiant desde l'inici.
-		Simplement fa falta ficar entre els bits 21-11 el num. d'entrada de la T.P que ha de fer servir
 	*/
+
 	int dir_data_start = 0 | (PAG_LOG_INIT_DATA<<12) | 0;
 	int dir_free_start = 0 | (PAG_LOG_INIT_FREE<<12) | 0;
 
@@ -202,7 +225,13 @@ int sys_fork()
 
 	// 7.3. Hierarchy
 	child_task->father = father_task;
-	INIT_LIST_HEAD(&child_task->child_list);
+	INIT_LIST_HEAD(&child_task->list);
+    INIT_LIST_HEAD(&child_task->child_node);
+    INIT_LIST_HEAD(&child_task->child_list);
+
+	// 7.4. Sempahore
+	// PREGUNTAR si s'hereden blocks
+	child_task->state = ST_READY;
 
 	// 8. Actualitzem reg. necessaris
 	// No se a que es refereix el document.
@@ -214,14 +243,21 @@ int sys_fork()
 		------
 		Com que fill sera iniciat pel scheduler --> top del stack ha de tindre "ebp" i "ret".
 		El "ebp" no importa perque voldrem sortir de mode sistema i en el wrapper del fork tenim el ebp de mode usuari.
+		// Recorda que fill continua executant just on ho ha deixat el pare.
 		El "ret" no volem que sigui automaticament el del handler perque volem retornar 0 (donat que fork() desde fill retorna 0)
 		Finalment haurem d'actualitzar el kernel_esp del fill perque apunti a la direccio correcta (el task_switch ho necessita)
 		
+		OBSERVACIO
+		----------
+		El pare (que ha copiat tot identicament al fill) podria ser que tingues mes coses a la pila o inclus altres.
+		El que sabem del cert (i ens interesa) es el que hi ha a l'esquema.
+		Com que el fill te el kernel_esp apuntant on li hem dit, totes les coses "superiors" de la pila estan "brutes" i ni interessen.
+
 		|			%ebp_trash		|
-		|		@ret_from_fork		|  Aqui %ebp de sys_fork
-		|	@ret_sysenter_handler	| (1)
-		| 			Ctx. SW 		| (11)
-		|			Ctx. HW			| (5)
+		|		@ret_from_fork		|  Aqui %ebp de sys_fork ???
+		|	@ret_sysenter_handler	|  (1)
+		| 			Ctx. SW 		|  (11)
+		|			Ctx. HW			|  (5)
 		|---------------------------|
 	*/ 
 
@@ -231,7 +267,6 @@ int sys_fork()
 
 	// 10. Fiquem al fill en readyqueue perque el scheduler ja el comenci a tindre en compte
 	// NOTA: Recorda que scheduler estem fent FIFO --> Afegir al final
-	child_task->state = ST_READY;
 	list_add_tail(pchild, &readyqueue);
 
 	// 11. Assignem a pare el nou fill
@@ -243,21 +278,25 @@ int sys_fork()
 
 void sys_exit(void)
 {
-	// Treure frames (USER) del process
-	// TODO: Es podria fer que nomes anes a les DATA i CODE
-	for (unsigned int i = NUM_PAG_KERNEL; i < TOTAL_PAGES; i++)
+	// 1. Alliberar frames (que no siguin KERNEL) del proces
+	// IMPORTANT: NO alliberar code perque potser el pare el continua necessitant (esta compartit)
+    
+	// PREGUNTAR: Aqui tambe haig d'alliberar tot el posterior de CODE 
+	page_table_entry *PT = get_PT(current());
+
+	for (unsigned int i = 0; i < NUM_PAG_DATA; i++)
 	{
-		free_frame(i);
+		free_frame(get_frame(PT, PAG_LOG_INIT_DATA + i));
 	}
 
-	// Gestionar els fills
+	// 2. Gestionar jerarquia = Assignar nou pare als fills
 	struct list_head *plist_child;
 	struct list_head *aux;  // Per a list_for_each_safe
-	struct list_head *current_childs = &(current()->child_list);
+	struct list_head *pcurrent_childs_list = &(current()->child_list);
 	
-	if (!list_empty(current_childs))
+	if (!list_empty(pcurrent_childs_list))
 	{
-		struct task_struct *child_task;
+		struct task_struct *pchild_task;
 		struct task_struct *pnew_father;
 
 		// Determinar qui es el nou pare
@@ -268,24 +307,28 @@ void sys_exit(void)
 
 		// Canviar de pare als fills de la generacio mes proxima
 		// IMPO: Usar list_for_each_safe perque estem modificant la llista
-		list_for_each_safe(plist_child, aux, current_childs) 
+		list_for_each_safe(plist_child, aux, pcurrent_childs_list) 
 		{
 			// Obtenir el task_struct del fill
 			// IMPO: Obtenir des del node corresponent a la llista de fills
-			child_task = list_entry(plist_child, struct task_struct, child_node);
+			pchild_task = list_entry(plist_child, struct task_struct, child_node);
 
 			// 1. Treure el fill de la llista del current
 			list_del(plist_child);
 
 			// 2. Assignar el nou pare al fill
-			child_task->father = pnew_father;
+			pchild_task->father = pnew_father;
 
 			// 3. Afegir el fill a la llista de fills del nou pare
 			list_add_tail(plist_child, &(pnew_father->child_list));
 		}
 	}
 
-	// Encolar PCB de current (que es el que s'esta fent exit) a freequeue
+	// 3. Treure'ns de la child_list del nostre pare
+    if (current()->father != current())
+		list_del(&current()->child_node);
+
+	// 4. Encolar PCB de current (que es el que s'esta fent exit) a freequeue
 	list_add_tail(&(current()->list), &freequeue);
 
 	// Cridar al scheduler
@@ -303,11 +346,14 @@ int sys_write(int fd, char *buffer, int size)
 	if (ret != 0)
 		return ret;
 
-	if (buffer == 0)  // No tenim null
+	if (buffer == NULL)  // No tenim null
 		return -EFAULT;
 
 	if (size < 0)
-		return -EINVAL;  
+		return -EINVAL;
+	
+	if (size == 0)
+		return 0;
 
 	// General case
 	const int CHUNK = 256;  // valor trivial
@@ -319,7 +365,7 @@ int sys_write(int fd, char *buffer, int size)
 	while (total < size)
 	{
 		remaining = size - total;
-		temp_size = (size > remaining) ? CHUNK : remaining;
+		temp_size = (remaining > CHUNK) ? CHUNK : remaining;
 		
 		ret = copy_from_user(buffer + total, k_buffer, temp_size);
 		if (ret != 0)

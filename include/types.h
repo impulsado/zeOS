@@ -156,7 +156,7 @@ typedef union
   pbase_addr:
     No guarda @, guarda identificadors (Per poder fer "<<12 | offset")
     Apunta al "seguent" espai de memoria important:
-    - Si es de la PD --> Apunta a PT
+    - Si es de la PD --> Apunta a identificador (de memoria fisica) on esta guardada la TP
     - Si es de la PT --> Identificador de frame fisic
 */
 

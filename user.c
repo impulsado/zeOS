@@ -20,12 +20,12 @@ int __attribute__ ((__section__(".text.main"))) main(void)
 		for (int i = 0; i < 5; i++) 
 		{
 			write(1, "Soc fill\n", 9);
-			//exit();
+			exit();
 		}
 	}
 	else
 	{
-		for (int i = 0; i < 5; i++) 
+		for (int i = 0; i < 50; i++) 
 		{
 			write(1, "Soc pare\n", 10);
 		}
