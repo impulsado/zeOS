@@ -230,8 +230,8 @@ int sys_fork()
     INIT_LIST_HEAD(&child_task->child_list);
 
 	// 7.4. Sempahore
-	// PREGUNTAR si s'hereden blocks
 	child_task->state = ST_READY;
+	child_task->pending_unblocks = 0;  // Els blocks estan relacionats amb el process
 
 	// 8. Actualitzem reg. necessaris
 	// No se a que es refereix el document.
@@ -287,7 +287,7 @@ void sys_exit(void)
 	// 1. Alliberar frames (que no siguin KERNEL) del proces
 	// IMPORTANT: NO alliberar code perque potser el pare el continua necessitant (esta compartit)
     
-	// PREGUNTAR: Aqui tambe haig d'alliberar tot el posterior de CODE 
+	// NOTE: Si en el futur es fa una altra gestio extra de la TP, s'hauran d'alliberar aquestes entrades 
 	page_table_entry *PT = get_PT(current());
 
 	for (unsigned int i = 0; i < NUM_PAG_DATA; i++)
@@ -410,7 +410,6 @@ void sys_block(void)
 	current()->state = ST_BLOCKED;
 	list_add_tail(pcurrent_list, &blocked);  // Add to blockedqueue
 
-	// PREGUNTA: Aqui quin hauria de ficar?
 	sched_next_rr();  // Per anar mes rapids
 }
 
