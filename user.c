@@ -15,19 +15,48 @@ int __attribute__ ((__section__(".text.main"))) main(void)
 	int pid = fork();
 	itoa(pid, buf);
 
-	if (pid == 0)
+	/*
+			F
+		C1		C2
+	C11
+	*/
+	if (pid == 0)  // C1
 	{
-		for (int i = 0; i < 5; i++) 
+		pid = fork();
+
+		if (pid == 0)  // C11
 		{
-			write(1, "Soc fill\n", 9);
-			exit();
+			while (1)
+			{
+				write(1, "C11\n", 4);
+			}
+		}
+		else  // C1
+		{
+			for (int i = 0; i < 50; i++)
+			{
+				write(1, "C1\n", 3);
+			}
+
+			exit();  // C11 deuria de recollirlo F i continuarse executant
 		}
 	}
-	else
+	else  // F
 	{
-		for (int i = 0; i < 50; i++) 
+		pid = fork();
+		if (pid == 0)  // C2
 		{
-			write(1, "Soc pare\n", 10);
+			while (1)
+			{
+				write(1, "C2\n", 3);
+			}
+		}
+		else  // F
+		{
+			while (1)
+			{
+				write(1, "F\n", 2);
+			}
 		}
 	}
 

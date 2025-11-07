@@ -278,6 +278,12 @@ int sys_fork()
 
 void sys_exit(void)
 {
+	// ===  Base Case
+	// INIT no pot fer exit.
+	if (current()->PID == 1)
+		return;
+
+	// === General Case
 	// 1. Alliberar frames (que no siguin KERNEL) del proces
 	// IMPORTANT: NO alliberar code perque potser el pare el continua necessitant (esta compartit)
     
@@ -403,6 +409,8 @@ void sys_block(void)
 	list_del(pcurrent_list);  // Remove from readyqueue
 	current()->state = ST_BLOCKED;
 	list_add_tail(pcurrent_list, &blocked);  // Add to blockedqueue
+
+	// PREGUNTA: Aqui quin hauria de ficar?
 	sched_next_rr();  // Per anar mes rapids
 }
 
@@ -410,7 +418,7 @@ int sys_unblock(int pid)
 {
 	//=== Base Case
 	// 1. Comprovar que el pid sigui fill de current
-	struct task_struct *pchild_task = 0;
+	struct task_struct *pchild_task = NULL;
 	struct list_head *aux_list;
 	struct task_struct *aux_task;
 
@@ -424,8 +432,8 @@ int sys_unblock(int pid)
 		}
 	}
 
-	if (pchild_task == 0)
-		return -1;
+	if (pchild_task == NULL)
+		return -ECHILD;
 
 	//=== General Case
 	// 2. Gestionar accio amb el fill
