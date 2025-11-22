@@ -10,6 +10,7 @@
 #include <io.h>
 #include <utils.h>
 #include <p_stats.h>
+#include <errno.h>
 
 /**
  * Container for the Task array and 2 additional pages (the first and the last one)
@@ -172,6 +173,16 @@ void init_idle (void)
 
   allocate_DIR(c);
 
+  // Iniciar threads 
+  // NOTA: No es fara servir perque no saltem a mode usuari. Pero per seguretat.
+  c->initial_thread=c;
+  INIT_LIST_HEAD(&c->thread_list);
+  INIT_LIST_HEAD(&c->thread_node);
+  c->tid=0;
+  c->thread_count=1;
+  c->slot_num=THREAD_STACK_SLOT_NONE;
+  c->slot_mask=0;
+
   uc->stack[KERNEL_STACK_SIZE-1]=(unsigned long)&cpu_idle; /* Return address */
   uc->stack[KERNEL_STACK_SIZE-2]=0; /* register ebp */
 
@@ -203,6 +214,15 @@ void init_task1(void)
 
   set_user_pages(c);
 
+  // Iniciar threads
+  c->initial_thread=c;
+  INIT_LIST_HEAD(&c->thread_list);
+  INIT_LIST_HEAD(&c->thread_node);
+  c->tid=0;
+  c->thread_count=1;
+  c->slot_mask=0;
+  c->slot_num=THREAD_STACK_SLOT_NONE;
+
   tss.esp0=(DWord)&(uc->stack[KERNEL_STACK_SIZE]);
   setMSR(0x175, 0, (unsigned long)&(uc->stack[KERNEL_STACK_SIZE]));
 
@@ -219,6 +239,13 @@ void init_freequeue()
   for (i=0; i<NR_TASKS; i++)
   {
     task[i].task.PID=-1;
+    task[i].task.initial_thread=NULL;
+    INIT_LIST_HEAD(&(task[i].task.thread_list));
+    INIT_LIST_HEAD(&(task[i].task.thread_node));
+    task[i].task.tid=0;
+    task[i].task.thread_count=0;
+    task[i].task.slot_num=THREAD_STACK_SLOT_NONE;
+    task[i].task.slot_mask=0;
     list_add_tail(&(task[i].task.list), &freequeue);
   }
 }
@@ -263,4 +290,112 @@ void force_task_switch()
   update_process_state_rr(current(), &readyqueue);
 
   sched_next_rr();
+}
+
+/* Agafar el bit de la posicio slot i comprovar si es 1 o 0*/
+static unsigned int get_slot_status(unsigned int mask, unsigned int slot)
+{
+  return (mask>>slot) & 1;
+}
+
+static void set_slot_status(struct task_struct *t, unsigned int slot, unsigned int value)
+{
+  unsigned int bit_pos = 1 << slot;
+  unsigned int mask = t->slot_mask & ~bit_pos;  // Ficar nomes el bit en la posicio a 0
+  t->slot_mask = (mask | (value << slot));  // Assignar al bit el valor
+}
+
+static unsigned int stack_slot_init_page(unsigned int slot)
+{
+  return THREAD_STACK_SLOT_INIT_PAGE(slot);
+}
+
+static unsigned int stack_slot_limit_page(unsigned int slot)
+{
+  return THREAD_STACK_SLOT_LIMIT_PAGE(slot);
+}
+
+static int map_stack_page(struct task_struct *t, unsigned int logical_page)
+{
+  // === BASE CASE
+  // Comprovar que no estigui ocupada
+  page_table_entry *process_PT = get_PT(t);
+  if (process_PT[logical_page].bits.present)
+    return -EBUSY;
+    
+  // === GENERAL CASE
+  // Agafar frame fisic
+  int frame = alloc_frame();
+  if (frame < 0) 
+    return -ENOMEM;
+
+  // Assignar el frame
+  set_ss_pag(process_PT, logical_page, frame);
+
+  // Fer flush TLB
+  set_cr3(get_DIR(process_PT));
+
+  return 0;
+}
+
+int task_alloc_stack_slot(struct task_struct *t)
+{
+  // === BASE CASE
+  // IDLE i INIT no tenen slot
+  if (t->PID == 0 || t->PID == 1)
+    return -EINVAL;
+
+  // No hi ha slots disponibles
+  unsigned int slot = t->thread_count - 1;  // -1 per treure el inicial
+  if (slot >= THREAD_MAX_STACK_SLOTS)
+    return -EAGAIN;
+
+  // === GENERAL CASE
+  // Assignar num slot
+  struct task_struct *master_thread = t->initial_thread;
+  for (unsigned int i = 0; i < NR_TASKS-2; i++)
+  {
+    if (!get_slot_status(master_thread->slot_mask, i))  // Si 0 --> Significa que dispo
+    {
+      t->slot_num = i;
+    }
+  }
+
+  // Iniciar nomes primera pagina
+  unsigned int init_page = stack_slot_init_page(t->slot_num);
+  
+  map_stack_page(t, init_page);
+
+  return 0;
+}
+
+void task_release_stack_slot(struct task_struct *t)
+{
+  // === BASE CASE
+  // No esta assignat a cap slot
+  if (t->slot_num == THREAD_STACK_SLOT_NONE) 
+    return;
+
+  // === GENERAL CASE
+  page_table_entry *process_PT = get_PT(t);
+  unsigned int init_page = stack_slot_init_page(t->slot_num);
+  unsigned int limit_page = stack_slot_limit_page(t->slot_num);
+  struct task_struct *master_thread = t->initial_thread;
+  
+  // Desasignar frames
+  for (unsigned int page = init_page; page <= limit_page; page++)
+  {
+    if (process_PT[page].bits.present)
+    {
+      unsigned int frame = get_frame(process_PT, page);
+      del_ss_pag(process_PT, page);
+      free_frame(frame);
+    }
+  }
+
+  // Fer flush de TLB
+  set_cr3(get_DIR(process_PT));
+
+  // Treure el bit en el master_thread
+  set_slot_status(master_thread, t->slot_num, 0);
 }

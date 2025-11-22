@@ -201,6 +201,7 @@ void sys_exit()
   }
   
   /* Free task_struct */
+  task_release_stack_slot(current());
   list_add_tail(&(current()->list), &freequeue);
   
   current()->PID=-1;
@@ -235,4 +236,12 @@ int sys_get_stats(int pid, struct stats *st)
     }
   }
   return -ESRCH; /*ESRCH */
+}
+
+int sys_ThreadCreate(void (*function)(void* arg), void* parameter, DWord _usr_thread_wrapper_func)
+{
+  (void)function;
+  (void)parameter;
+  (void)_usr_thread_wrapper_func;
+  return -ENOSYS;
 }
