@@ -255,8 +255,15 @@ void inner_task_switch(union task_union* new_union)
 	struct task_struct *new_pcb = &(new_union->task);
 
 	// Canviar de contexte la memoria
-	// IMPO: Ho podem fer aqui perque els unions estan en KERNEL.
-	// Com que el kernel esta mapped en totes les entrades (0-255) igual, no afecta dins aquesta funcio.
+	/*
+		TEORIA
+		------
+		Aquest canvi de cr3 es perque el nou process, en usuari, sapigui traduir correctament les @logiques.
+		El canvi de cr3 dins de kernel NO afecta.
+		Aixo es perque tots els processos tenen les mateixes primers 256 entrades apuntant a la mateixa regio memoria.
+		Fem aquest canvi de cr3 aqui perque quan entri el nou proces l'unic que fara sera intentar "sortir" de mode sistema.
+		En el recorregut de "pops", ... que fara NO hi ha cap altre comu a tots els casos on podem fer set_cr3.
+	*/
 	set_cr3(get_DIR(new_pcb));
 
 	// Actualitzem en la TSS per si entrem amb int
