@@ -52,3 +52,9 @@ void perror()
 
   write(1, buffer, strlen(buffer));
 }
+
+void ThreadWrapper(void (*function)(void* arg), void* parameter)
+{
+  function(parameter);
+  ThreadExit();
+}

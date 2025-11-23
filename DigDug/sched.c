@@ -178,7 +178,7 @@ void init_idle (void)
   c->initial_thread=c;
   INIT_LIST_HEAD(&c->thread_list);
   INIT_LIST_HEAD(&c->thread_node);
-  c->tid=0;
+  c->TID=0;
   c->thread_count=1;
   c->slot_num=THREAD_STACK_SLOT_NONE;
   c->slot_mask=0;
@@ -218,7 +218,7 @@ void init_task1(void)
   c->initial_thread=c;
   INIT_LIST_HEAD(&c->thread_list);
   INIT_LIST_HEAD(&c->thread_node);
-  c->tid=0;
+  c->TID=0;
   c->thread_count=1;
   c->slot_mask=0;
   c->slot_num=THREAD_STACK_SLOT_NONE;
@@ -242,7 +242,7 @@ void init_freequeue()
     task[i].task.initial_thread=NULL;
     INIT_LIST_HEAD(&(task[i].task.thread_list));
     INIT_LIST_HEAD(&(task[i].task.thread_node));
-    task[i].task.tid=0;
+    task[i].task.TID=0;
     task[i].task.thread_count=0;
     task[i].task.slot_num=THREAD_STACK_SLOT_NONE;
     task[i].task.slot_mask=0;
@@ -283,7 +283,6 @@ void inner_task_switch(union task_union *new)
   switch_stack(&current()->register_esp, new->task.register_esp);
 }
 
-
 /* Force a task switch assuming that the scheduler does not work with priorities */
 void force_task_switch()
 {
@@ -305,12 +304,12 @@ static void set_slot_status(struct task_struct *t, unsigned int slot, unsigned i
   t->slot_mask = (mask | (value << slot));  // Assignar al bit el valor
 }
 
-static unsigned int stack_slot_init_page(unsigned int slot)
+static unsigned int get_slot_init_page(unsigned int slot)
 {
   return THREAD_STACK_SLOT_INIT_PAGE(slot);
 }
 
-static unsigned int stack_slot_limit_page(unsigned int slot)
+static unsigned int get_slot_limit_page(unsigned int slot)
 {
   return THREAD_STACK_SLOT_LIMIT_PAGE(slot);
 }
@@ -362,9 +361,14 @@ int task_alloc_stack_slot(struct task_struct *t)
   }
 
   // Iniciar nomes primera pagina
-  unsigned int init_page = stack_slot_init_page(t->slot_num);
+  unsigned int init_page = get_slot_init_page(t->slot_num);
   
-  map_stack_page(t, init_page);
+  int ret = map_stack_page(t, init_page);
+  if (ret < 0)
+  {
+    task_release_stack_slot(t);
+    return ret;
+  }
 
   return 0;
 }
@@ -378,9 +382,8 @@ void task_release_stack_slot(struct task_struct *t)
 
   // === GENERAL CASE
   page_table_entry *process_PT = get_PT(t);
-  unsigned int init_page = stack_slot_init_page(t->slot_num);
-  unsigned int limit_page = stack_slot_limit_page(t->slot_num);
-  struct task_struct *master_thread = t->initial_thread;
+  unsigned int init_page = get_slot_init_page(t->slot_num);
+  unsigned int limit_page = get_slot_limit_page(t->slot_num);
   
   // Desasignar frames
   for (unsigned int page = init_page; page <= limit_page; page++)
@@ -395,7 +398,4 @@ void task_release_stack_slot(struct task_struct *t)
 
   // Fer flush de TLB
   set_cr3(get_DIR(process_PT));
-
-  // Treure el bit en el master_thread
-  set_slot_status(master_thread, t->slot_num, 0);
 }

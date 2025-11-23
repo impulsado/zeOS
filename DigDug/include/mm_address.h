@@ -16,8 +16,8 @@
 #define THREAD_MAX_STACK_SLOTS NR_TASKS - 2 /* Nombre de slots que podrem assignar (treure idle que no te threads i el init (thread0))*/
 
 #define THREAD_STACK_REGION_FIRST_PAGE (PAG_LOG_INIT_DATA + NUM_PAG_DATA)                                           /* Delimitar on comencen els slots*/
-#define THREAD_STACK_SLOT_INIT_PAGE(slot) (THREAD_STACK_REGION_FIRST_PAGE + ((slot) * THREAD_STACK_SLOT_PAGES))     /* Delimitar inici del slot */
-#define THREAD_STACK_SLOT_LIMIT_PAGE(slot) (THREAD_STACK_SLOT_INIT_PAGE(slot) + THREAD_STACK_SLOT_PAGES - 1)        /* Delimitar tope del slot (limit) */
+#define THREAD_STACK_SLOT_LIMIT_PAGE(slot) (THREAD_STACK_REGION_FIRST_PAGE + ((slot) * THREAD_STACK_SLOT_PAGES))     /* Delimitar tope del slot (limit) */
+#define THREAD_STACK_SLOT_INIT_PAGE(slot) (THREAD_STACK_SLOT_LIMIT_PAGE(slot) + THREAD_STACK_SLOT_PAGES - 1)        /* Delimitar inici del slot */
 
 #define PAG_LOG_INIT_FREE (THREAD_STACK_SLOT_LIMIT_PAGE(THREAD_MAX_STACK_SLOTS))
 
@@ -43,11 +43,13 @@
     |       CODE            |
     |-----------------------| <-- PAG_LOG_INIT_DATA
     |   DATA (Thread 0)     |
-    |-----------------------| <-- THREAD_STACK_SLOT_INIT_PAGE(0)
-    |                       |
-    |   Slot 0 (Thread 1)   |
-    |                       |
     |-----------------------| <-- THREAD_STACK_SLOT_LIMIT_PAGE(0)
+    |       page 7          |
+    | - - - - - - - - - - - |
+    |   Slot 0 (Thread 1)   |
+    | - - - - - - - - - - - | <-- THREAD_STACK_SLOT_INIT_PAGE(0)
+    |       page 0          |
+    |-----------------------|
     |          ...          |
     |-----------------------|
     |       Slot MAX        |

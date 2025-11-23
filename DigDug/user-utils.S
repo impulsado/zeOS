@@ -100,3 +100,18 @@ ENTRY(get_stats)
 	popl %ebp
 	ret
 
+/* int ThreadCreate(void (*function)(void* arg), void* parameter) */
+ENTRY(ThreadCreate)
+	pushl %ebp
+	movl %esp, %ebp
+	pushl %ebx;  // Save EBX, ESI and EDI if modified
+	movl $5, %eax
+	movl 8(%ebp), %ebx; // function
+	movl 12(%ebp), %ecx;  // parameter
+	movl $ThreadWrapper, %edx;  // ThreadWrapper
+	call syscall_sysenter
+	popl %ebx
+	test %eax, %eax
+	js nok	// if (eax < 0) -->
+	popl %ebp
+	ret

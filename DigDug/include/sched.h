@@ -50,7 +50,7 @@ struct task_struct
   int total_quantum;		                    /* Total quantum of the process */
 
   // ==== THREADING
-  unsigned int tid;
+  unsigned int TID;
 
   unsigned int slot_num;    /* Num del slot */
   unsigned int slot_mask;   /* Veure EXPLICACIO */
@@ -116,6 +116,5 @@ struct task_struct *task_initial_thread(struct task_struct *t);
 int task_alloc_stack_slot(struct task_struct *t);
 void task_release_stack_slot(struct task_struct *t);
 int task_map_initial_stack_page(struct task_struct *t);
-int task_handle_stack_fault(struct task_struct *t, unsigned int fault_page);  // FERRR: Aixo deuria anar a page fault routine
 
 #endif  /* __SCHED_H__ */
