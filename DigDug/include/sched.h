@@ -112,6 +112,9 @@ void update_sched_data_rr();
 
 void init_stats(struct stats *s);
 
+void set_slot_status(struct task_struct *t, unsigned int slot, unsigned int value);
+unsigned int get_slot_init_page(unsigned int slot);
+
 struct task_struct *task_initial_thread(struct task_struct *t);
 int task_alloc_stack_slot(struct task_struct *t);
 void task_release_stack_slot(struct task_struct *t);

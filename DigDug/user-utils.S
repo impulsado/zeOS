@@ -115,3 +115,12 @@ ENTRY(ThreadCreate)
 	js nok	// if (eax < 0) -->
 	popl %ebp
 	ret
+
+/* void ThreadExit(void) */
+ENTRY(ThreadExit)
+	pushl %ebp
+	movl %esp, %ebp
+	movl $6, %eax
+	call syscall_sysenter
+	popl %ebp
+	ret

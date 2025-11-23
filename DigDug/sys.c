@@ -50,6 +50,7 @@ int sys_getpid()
 }
 
 int global_PID=1000;
+static unsigned int global_TID=0;
 
 int ret_from_fork()
 {
@@ -240,69 +241,112 @@ int sys_get_stats(int pid, struct stats *st)
 
 int sys_ThreadCreate(void (*function)(void* arg), void* parameter, void (*_wrapper)(void* arg))
 {
-  // === BASE CASE  
-  // Els params son valids
-  if (function == NULL) return -EINVAL;
-  if (!access_ok(VERIFY_READ, function, sizeof(void (*)(void *)))) return -EINVAL;
-  if (parameter && !access_ok(VERIFY_READ, parameter, sizeof(void (void *)))) return -EINVAL;
+  // === BASE CASE
+  // Validar parametres
+  if (function == NULL || _wrapper == NULL) return -EINVAL;
+  if (!access_ok(VERIFY_READ, function, sizeof(void (*)(void *)))) return -EFAULT;
+  if (parameter && !access_ok(VERIFY_READ, _wrapper, sizeof(void (*)(void *)))) return -EFAULT;
 
   // Hi ha algun TCB(PCB) dispo
   if (list_empty(&freequeue)) return -ENOMEM;
 
   // === GENERAL CASE
-  int ret;
-  union task_union *pu_TCB;
-  struct list_head *plh_TCB;
-  struct task_struct *pts_TCB;
-
   // Obtindre TCB
-  plh_TCB = list_head(&freequeue);
-  list_del(plh_TCB);
-  pts_TCB = list_head_to_task_struct(plh_TCB);
-  pu_TCB = (union task_union*)pts_TCB;
+  struct list_head *free_entry = list_first(&freequeue);
+  list_del(free_entry);
+  union task_union *new_union = (union task_union*)list_head_to_task_struct(free_entry);
+  struct task_struct *new_task = &new_union->task;
 
-  // Copiar tot el TCB (despres mod)
-  copy_data(current(), pu_TCB, sizeof(union task_union));
+  // Replicar el TCB
+  copy_data(current(), new_union, sizeof(union task_union));
 
-  // Assignar slot (stack usuari)
-  ret = task_alloc_stack_slot(pts_TCB);
+  // Obtindre master_thread
+  struct task_struct *master_thread = task_initial_thread(current());
+  if (master_thread == NULL)
+  {
+    list_add_tail(free_entry, &freequeue);
+    return -EINVAL;
+  }
+
+  // Assignar parametres al nou TCB
+  init_stats(&(new_task->p_stats));
+  new_task->TID = ++global_TID;  // Incrementar abans d'assignar
+  new_task->state = ST_READY;
+  new_task->initial_thread = master_thread;
+  new_task->slot_mask = 0;
+  new_task->slot_num = THREAD_STACK_SLOT_NONE;
+  new_task->thread_count = 1;
+  INIT_LIST_HEAD(&new_task->thread_list);
+  INIT_LIST_HEAD(&new_task->thread_node);
+
+  // Assignar slot de user stack
+  int ret = task_alloc_stack_slot(new_task);
   if (ret < 0)
   {
-    list_add_tail(plh_TCB, &freequeue);
+    task_release_stack_slot(new_task);
+    list_add_tail(free_entry, &freequeue);
     return ret;
   }
 
   // Preparar la pila usuari
-  unsigned int init_page = get_slot_init_page(pts_TCB->slot_num);
-  DWord *p_user_esp = init_page << 12;
-  p_user_esp[PAGE_SIZE - 3] = 0;  // offset per a C
-  p_user_esp[PAGE_SIZE - 2] = function;
-  p_user_esp[PAGE_SIZE - 1] = parameter;
+  // NOTA: Accedir a la page+1 per agafar la @bottom de la pagina (perque son sequencials)
+  // NOTA: Fer "--i" i no "i--" perque en la primera versio decrementem abans d'accedir
+  unsigned int init_page = get_slot_init_page(new_task->slot_num);
+
+  DWord user_stack = ((DWord)(init_page + 1)) << 12;
+  DWord *user_esp = (DWord *)user_stack;
+  *(--user_esp) = (DWord)parameter;
+  *(--user_esp) = (DWord)function;
+  *(--user_esp) = 0;  // ebp trash
+  DWord initial_user_esp = (DWord)user_esp;
 
   // Preparar la pila sistema
-  // NOTA: Retornar per ret_from_fork perque ja ho tenim implementat i vam calcular els off per a l'entrega 2
-  DWord *p_sys_esp = &pu_TCB->stack;
-  p_sys_esp[KERNEL_STACK_SIZE - 19] = 0;  // ebp_trash
-  p_sys_esp[KERNEL_STACK_SIZE - 18] = ret_from_fork;  // ret_from_fork
-  p_sys_esp[KERNEL_STACK_SIZE - 5] = _wrapper;  // user_eip
-  p_sys_esp[KERNEL_STACK_SIZE - 2] = &p_user_esp[PAGE_SIZE - 3];  // user_esp
-  pts_TCB->register_esp = &p_sys_esp[KERNEL_STACK_SIZE - 19];
-
-  // Assignar parametres de thread
-  struct task_struct *pts_master_thread = current()->initial_thread;
-  pts_TCB->TID = zeos_ticks;
-  pts_TCB->state = ST_READY;
-  INIT_LIST_HEAD(&(pts_TCB->thread_list));
-  pts_TCB->initial_thread = pts_master_thread;
+  // OBS: Fem servir el ret_from_fork i au
+  DWord *kernel_stack = new_union->stack;
+  kernel_stack[KERNEL_STACK_SIZE - 19] = 0;  // ebp_trash
+  kernel_stack[KERNEL_STACK_SIZE - 18] = (DWord)&ret_from_fork;
+  kernel_stack[KERNEL_STACK_SIZE - 5] = (DWord)_wrapper;  // user_eip
+  kernel_stack[KERNEL_STACK_SIZE - 2] = initial_user_esp;  // user_esp
+  new_task->register_esp = (int)&kernel_stack[KERNEL_STACK_SIZE - 19];
 
   // Actualitzar el master
-  // IMPO: NO volem jerarquia de threads aixi que hem de "propagar" el thread inicial
-  list_add_tail(&(pts_TCB->thread_node), &(pts_master_thread->thread_list));
-  set_slot_status(pts_master_thread, pts_TCB->slot_num, 1);
-  pts_master_thread->thread_count++;
+  list_add_tail(&(new_task->thread_node), &(master_thread->thread_list));
+  master_thread->thread_count++;
 
-  // Encolar nou thread a ready
-  list_add_tail(plh_TCB, &readyqueue); 
+  // Encolar nou thread a readyqueue
+  list_add_tail(&(new_task->list), &readyqueue);
 
-  return pts_TCB->TID;
+  return new_task->TID;
+}
+
+int sys_ThreadExit(void)
+{
+  // === BASE CASE
+  // Es invalid o fem exit del master
+  struct task_struct *curr = current();
+  struct task_struct *leader = task_initial_thread(curr);
+
+  if (leader == NULL || leader == curr)
+  {
+    sys_exit();
+    return 0;
+  }
+
+  // === GENERAL CASE
+  // Eliminar thread de la llista del master
+  list_del(&(curr->thread_node));
+
+  // Decrementar el comptador de threads del process 
+  if (leader->thread_count > 1)
+    leader->thread_count--;
+
+  // Alliberar el slot assignat
+  task_release_stack_slot(curr);
+  
+  // Assignar TCB(PCB) com a disponible
+  list_add_tail(&(curr->list), &freequeue);
+
+  // Forsar canvi de thread/process
+  sched_next_rr();
+  return 0;
 }

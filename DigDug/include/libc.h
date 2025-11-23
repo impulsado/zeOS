@@ -28,6 +28,8 @@ int yield();
 
 int get_stats(int pid, struct stats *st);
 
-int ThreadWrapper(void (*function)(void* arg), void* parameter);
+int ThreadCreate(void (*function)(void* arg), void* parameter);
+void ThreadExit(void);
+void ThreadWrapper(void (*function)(void* arg), void* parameter);
 
 #endif  /* __LIBC_H__ */
