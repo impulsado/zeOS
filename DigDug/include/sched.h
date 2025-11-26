@@ -17,25 +17,6 @@
 
 enum state_t { ST_RUN, ST_READY, ST_BLOCKED };
 
-/*
-  EXPLICACIO
-  ----------
-  1 PCB = 1 TCB
-  En aquesta implementacio: "Un nou PCB, si PID es igual --> Correspon a un nou thread"
-  D'aquesta forma ens estalviem crear un nou thread_struct i crear jerarquia amb punters.
-  Tambe aproiftem el fet que una "task" es una union i ja podem aprofitar el thread_kernel_stack = task->stack.
-
-  slot_mask
-  ---------
-  "unsigned int" que on el bit i-essim indica si el slot i-essim esta ocupat.
-  Si "slot_mask[i] == 1" significa que el slot "i" esta ocupat per algun thread. 
-
-  initial_thread
-  --------------
-  Thread que guarda informacio general sobre els threads del process. NOMES AQUEST.
-  Poder centralitzar la gestio de slot_mask i thread_count.
-*/
-
 struct task_struct 
 {
   // === GENERAL
@@ -58,7 +39,6 @@ struct task_struct
   struct task_struct *initial_thread;  /* Veure EXPLICACIO */
   struct list_head thread_list;
   struct list_head thread_node;
-  unsigned int thread_count;
 };
 
 union task_union {
@@ -114,10 +94,11 @@ void init_stats(struct stats *s);
 
 void set_slot_status(struct task_struct *t, unsigned int slot, unsigned int value);
 unsigned int get_slot_init_page(unsigned int slot);
+unsigned int get_slot_limit_page(unsigned int slot);
 
 struct task_struct *task_initial_thread(struct task_struct *t);
 int task_alloc_stack_slot(struct task_struct *t);
+int task_alloc_specific_stack_slot(struct task_struct *t, unsigned int slot);
 void task_release_stack_slot(struct task_struct *t);
-int task_map_initial_stack_page(struct task_struct *t);
 
 #endif  /* __SCHED_H__ */

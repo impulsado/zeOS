@@ -6,9 +6,9 @@
 #include <segment.h>
 #include <hardware.h>
 #include <io.h>
-
+#include <utils.h>
+#include <mm.h>
 #include <sched.h>
-
 #include <zeos_interrupt.h>
 
 Gate idt[IDT_ENTRIES];
@@ -17,11 +17,11 @@ Register    idtR;
 char char_map[] =
 {
   '\0','\0','1','2','3','4','5','6',
-  '7','8','9','0','\'','¡','\0','\0',
+  '7','8','9','0','\'','ï¿½','\0','\0',
   'q','w','e','r','t','y','u','i',
   'o','p','`','+','\0','\0','a','s',
-  'd','f','g','h','j','k','l','ñ',
-  '\0','º','\0','ç','z','x','c','v',
+  'd','f','g','h','j','k','l','ï¿½',
+  '\0','ï¿½','\0','ï¿½','z','x','c','v',
   'b','n','m',',','.','-','\0','*',
   '\0','\0','\0','\0','\0','\0','\0','\0',
   '\0','\0','\0','\0','\0','\0','\0','7',
@@ -95,6 +95,7 @@ void setTrapHandler(int vector, void (*handler)(), int maxAccessibleFromPL)
 void clock_handler();
 void keyboard_handler();
 void system_call_handler();
+void page_fault_handler_new();
 
 void setMSR(unsigned long msr_number, unsigned long high, unsigned long low);
 
@@ -116,9 +117,55 @@ void setIdt()
   /* ADD INITIALIZATION CODE FOR INTERRUPT VECTOR */
   setInterruptHandler(32, clock_handler, 0);
   setInterruptHandler(33, keyboard_handler, 0);
+  // IMPO: Ficar el nou tractament
+  setInterruptHandler(14, page_fault_handler_new, 0);
 
   setSysenter();
 
   set_idt_reg(&idtR);
 }
 
+void page_fault_routine_new(unsigned int fault_addr)
+{
+  struct task_struct *curr = current();
+
+  // === BASE CASE
+  // Si no te slot es que thread es de sistema i no deuria passar
+  if (curr->slot_num == THREAD_STACK_SLOT_NONE)
+    goto invalid_addr;
+  
+  // Comprovar access fora del slot
+  unsigned int lower_page = get_slot_limit_page(curr->slot_num);
+  unsigned int upper_page = get_slot_init_page(curr->slot_num);
+  unsigned int page = (fault_addr >> 12);
+  if ((page < lower_page) || (page > upper_page))
+    goto invalid_addr;
+  
+  // === GENERAL CASE
+  // Direccio valida
+  page_table_entry *process_PT = get_PT(curr);
+  int frame = alloc_frame();
+  if (frame < 0)
+  {
+    printk("ERROR! Run out of memory...");
+    while(1);
+  }
+
+  // Assignar el frame
+  set_ss_pag(process_PT, page, frame);
+
+  // Fer flush TLB
+  set_cr3(get_DIR(curr));
+
+  return;
+
+invalid_addr:
+  printk("\nProcess generates a PAGE FAULT exception at address: 0x");
+  
+  char buff[9];
+  itohex(fault_addr, buff);
+  printk(buff);
+  printk("\n");
+  
+  while(1);
+}

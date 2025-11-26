@@ -27,7 +27,8 @@
 #define KERNEL_START 0x10000
 #define L_USER_START 0x100000
 #define PH_USER_START 0x100000
-#define USER_ESP L_USER_START + (NUM_PAG_CODE + NUM_PAG_DATA) * 0x1000 - 16
+// IMPO: Com que ara INIT esta en el primer slot, hem d'apuntar a aquest nou desde l'inici.
+#define USER_ESP L_USER_START + (NUM_PAG_CODE + NUM_PAG_DATA + THREAD_STACK_SLOT_PAGES) * 0x1000 - 16
 
 #define USER_FIRST_PAGE (L_USER_START >> 12)
 
@@ -42,7 +43,7 @@
     |-----------------------| <-- PAG_LOG_INIT_CODE
     |       CODE            |
     |-----------------------| <-- PAG_LOG_INIT_DATA
-    |   DATA (Thread 0)     |
+    |       DATA            |
     |-----------------------| <-- THREAD_STACK_SLOT_LIMIT_PAGE(0)
     |       page 7          |
     | - - - - - - - - - - - |
@@ -51,20 +52,53 @@
     |       page 0          |
     |-----------------------|
     |          ...          |
-    |-----------------------|
+    |-----------------------| <-- THREAD_STACK_SLOT_LIMIT_PAGE(THREAD_MAX_STACK_SLOTS)
     |       Slot MAX        |
     |-----------------------| <-- PAG_LOG_INIT_FREE
     |          ...          |
     |-----------------------|
 
 
-    Thread0 continua fent servir les pagines de DATA (Legacy).
-    Per a un nou thread --> Agafar un nou slot.
-    Un slot son 8 pagines de les quals inicialment nomes esta mapejada la base (primera).
-    Quan hi ha un page_fault, es mira si esta dins el rang del slot que li pertoca:
-        - OK: Assignar un nou frame fisic i recuperar-se
-        - KO: Page fault.
+    IDEA
+    ----
+    Fem servir task_struct per guardar la informacio dels threads (no crear una nova struct).
+    Tots els threads (incloent el primer) utilitzen slots de 8 pagines per a la pila d'usuari.
+    // NOTA: 8 es un valor trivial donat que es probable que 32kB siguin mes que necessaris.
+    El segment DATA nomes te la primera pagina mapejada (Per tema legacy).
+    Quan es crea un thread es reserva un slot complet i nomes la pagina de la base esta mapejada (inicialment).
+    
+    - initial_thread (o tambe master_thread)
+        Punter al thread (TCB) que conte la informacio de gestio.
+        Serverix per centralitzar la llista de threads d'un process.
 
+    - slot_mask
+        "unsigned int" que on el bit i-essim indica si el slot i-essim esta ocupat.
+        Si "slot_mask[i] == 1" significa que el slot "i" esta ocupat per algun thread. 
+
+
+    page_fault
+    ----------
+    Els page faults dins del rang del slot fan que s'assgini un frame fins a omplir les 8 pagines.
+    Si no es pot assignar mes pagines al slot o es una direccio invalida --> while (1).
+    
+    sys_fork
+    --------
+    El fork copia sempre totes les 8 pagines del slot del pare perque el fill ha de tindre la mateixa pila.
+    // OBS: Fill tindra logicament el mateix slot que pare pero en espai fisic diferent.
+
+    sys_exit
+    --------
+    Si es el thread NO es l'inicial --> ThreadExit
+    Altrament es va iterant els threads del process i es va fent ThreadExit de cadascun.
+    Finalment es fa un sys_exit com sempre.
+
+    ThreadExit
+    ----------
+    Allibera el slot assignat
+
+    ThreadCreate
+    ------------
+    Agafa slot, assigna recursos i executa el ThreadWrapper
  */
 
 #endif

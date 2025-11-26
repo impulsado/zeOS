@@ -22,6 +22,7 @@ int init_frames( void );
 int alloc_frame( void );
 void free_frame( unsigned int frame );
 void set_user_pages( struct task_struct *task );
+void free_user_pages( struct task_struct *task );
 
 
 extern Descriptor  *gdt;

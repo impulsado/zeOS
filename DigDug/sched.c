@@ -179,7 +179,6 @@ void init_idle (void)
   INIT_LIST_HEAD(&c->thread_list);
   INIT_LIST_HEAD(&c->thread_node);
   c->TID=0;
-  c->thread_count=1;
   c->slot_num=THREAD_STACK_SLOT_NONE;
   c->slot_mask=0;
 
@@ -219,9 +218,9 @@ void init_task1(void)
   INIT_LIST_HEAD(&c->thread_list);
   INIT_LIST_HEAD(&c->thread_node);
   c->TID=0;
-  c->thread_count=1;
   c->slot_mask=0;
   c->slot_num=THREAD_STACK_SLOT_NONE;
+  task_alloc_specific_stack_slot(c, 0);  // NOTA: Aixo no pot fallar
 
   tss.esp0=(DWord)&(uc->stack[KERNEL_STACK_SIZE]);
   setMSR(0x175, 0, (unsigned long)&(uc->stack[KERNEL_STACK_SIZE]));
@@ -243,7 +242,6 @@ void init_freequeue()
     INIT_LIST_HEAD(&(task[i].task.thread_list));
     INIT_LIST_HEAD(&(task[i].task.thread_node));
     task[i].task.TID=0;
-    task[i].task.thread_count=0;
     task[i].task.slot_num=THREAD_STACK_SLOT_NONE;
     task[i].task.slot_mask=0;
     list_add_tail(&(task[i].task.list), &freequeue);
@@ -351,14 +349,11 @@ int task_alloc_stack_slot(struct task_struct *t)
   // === BASE CASE
   // No te master_thread 
   struct task_struct *master_thread = task_initial_thread(t);
-  if (master_thread == NULL) return -EINVAL;
-
-  // IDLE i INIT no tenen slot
-  if (t->PID == 0 || t->PID == 1)
+  if (master_thread == NULL) 
     return -EINVAL;
 
   // === GENERAL CASE
-  // Buscar un slot disponible
+  // Buscar un slot dispo
   unsigned int slot = THREAD_STACK_SLOT_NONE;
   for (unsigned int i = 0; i < THREAD_MAX_STACK_SLOTS; i++)
   {
@@ -373,6 +368,32 @@ int task_alloc_stack_slot(struct task_struct *t)
     return -EAGAIN;
 
   // Assignar el slot trovat
+  return task_alloc_specific_stack_slot(t, slot);
+}
+
+int task_alloc_specific_stack_slot(struct task_struct *t, unsigned int slot)
+{
+  // === BASE CASE
+  struct task_struct *master_thread = task_initial_thread(t);
+  
+  // Esta malament creat
+  if (master_thread == NULL) 
+    return -EINVAL;
+
+  // IDLE no te slot (es kernel mode)
+  if (master_thread->PID == 0) 
+    return -EINVAL;
+
+  // Num de slot invalid
+  if (slot >= THREAD_MAX_STACK_SLOTS || slot < 0) 
+    return -EINVAL;
+
+  // Ja esta ocupat
+  if (get_slot_status(master_thread->slot_mask, slot)) 
+    return -EBUSY;
+
+  // === GENERAL CASE
+  // Assignar num slot
   t->slot_num = slot;
   set_slot_status(master_thread, slot, 1);
 
@@ -383,10 +404,8 @@ int task_alloc_stack_slot(struct task_struct *t)
   {
     set_slot_status(master_thread, slot, 0);
     t->slot_num = THREAD_STACK_SLOT_NONE;
-    return ret;
   }
-
-  return 0;
+  return ret;
 }
 
 void task_release_stack_slot(struct task_struct *t)
@@ -402,14 +421,13 @@ void task_release_stack_slot(struct task_struct *t)
     return;
 
   // === GENERAL CASE
-
   unsigned int slot = t->slot_num;
   page_table_entry *process_PT = get_PT(master_thread);
-  unsigned int init_page = get_slot_init_page(slot);
-  unsigned int limit_page = get_slot_limit_page(slot);
+  unsigned int upper_page = get_slot_init_page(slot);
+  unsigned int lower_page = get_slot_limit_page(slot);
   
   // Desasignar frames
-  for (int page = init_page; page <= (int)limit_page; page++)
+  for (unsigned int page = lower_page; page <= upper_page; page++)
   {
     if (process_PT[page].bits.present)
     {

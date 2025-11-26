@@ -1,5 +1,6 @@
 #include <utils.h>
 #include <types.h>
+#include <sched.h>
 
 #include <mm_address.h>
 
@@ -65,22 +66,38 @@ int copy_to_user(void *start, void *dest, int size)
 int access_ok(int type, const void * addr, unsigned long size)
 {
   unsigned long addr_ini, addr_fin;
+  unsigned long slot_low = 0;
+  unsigned long slot_high = 0;
+  int has_slot = 0;
 
-  addr_ini=(((unsigned long)addr)>>12);
-  addr_fin=((((unsigned long)addr)+size)>>12);
+  struct task_struct *curr = current();
+  if (curr->slot_num != THREAD_STACK_SLOT_NONE)
+  {
+    slot_low = (unsigned long)get_slot_limit_page(curr->slot_num);
+    slot_high = (unsigned long)get_slot_init_page(curr->slot_num);
+    has_slot = 1;
+  }
+
+  addr_ini = (((unsigned long)addr) >> 12);
+  addr_fin = ((((unsigned long)addr) + size) >> 12);
   if (addr_fin < addr_ini) return 0; //This looks like an overflow ... deny access
 
   switch(type)
   {
     case VERIFY_WRITE:
       /* Should suppose no support for automodifyable code */
-      if ((addr_ini>=USER_FIRST_PAGE+NUM_PAG_CODE)&&
-          (addr_fin<=USER_FIRST_PAGE+NUM_PAG_CODE+NUM_PAG_DATA))
-	  return 1;
+      if (has_slot && (slot_low <= addr_ini) && (addr_fin <= slot_high))
+        return 1;
+
+      if ((addr_ini>=USER_FIRST_PAGE)&& (addr_fin<=USER_FIRST_PAGE+NUM_PAG_DATA))
+	      return 1;
+    
     default:
-      if ((addr_ini>=USER_FIRST_PAGE)&&
-  	(addr_fin<=(USER_FIRST_PAGE+NUM_PAG_CODE+NUM_PAG_DATA)))
-          return 1;
+      if (has_slot && (slot_low <= addr_ini) && (addr_fin <= slot_high))
+        return 1;
+      
+      if ((addr_ini>=USER_FIRST_PAGE)&& (addr_fin<=(USER_FIRST_PAGE+NUM_PAG_CODE+NUM_PAG_DATA)))
+        return 1;
   }
   return 0;
 }
@@ -140,5 +157,33 @@ void memset(void *s, unsigned char c, int size)
   for (i=0; i<size; i++)
   {
     m[i]=c;
+  }
+}
+
+void itohex(int value, char *buffer)
+{
+  static const char digits[] = "0123456789ABCDEF";
+  int i = 0;
+
+  if (value == 0)
+  {
+    buffer[0] = '0';
+    buffer[1] = 0;
+    return;
+  }
+
+  while (value)
+  {
+    buffer[i++] = digits[value & 0xF];
+    value >>= 4;
+  }
+
+  buffer[i] = 0;
+
+  for (int j = 0; j < i / 2; ++j)
+  {
+    char tmp = buffer[j];
+    buffer[j] = buffer[i - j - 1];
+    buffer[i - j - 1] = tmp;
   }
 }

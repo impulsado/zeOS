@@ -113,7 +113,24 @@ sysenter_err:
 sysenter_fin:
 	movl %eax, 0x18(%esp)
 	RESTORE_ALL
-	movl (%esp), %edx // Return address
-	movl 12(%esp), %ecx	      // User stack address
+	movl (%esp), %edx; // Return address
+	movl 12(%esp), %ecx;	      // User stack address
 	sti
 	sysexit
+
+ENTRY(page_fault_handler_new)
+      SAVE_ALL
+      pushl %eax
+      call user_to_system
+      popl %eax
+      EOI
+      movl %cr2, %eax;  // Agafar la address que ho ha provocat
+      pushl %eax
+      call page_fault_routine_new
+      addl $4, %esp;  // treure address
+      pushl %eax
+      call system_to_user
+      popl %eax
+      RESTORE_ALL
+      addl $4, %esp;  // treure error (afegit automaticament)
+      iret

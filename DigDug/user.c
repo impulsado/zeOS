@@ -1,14 +1,91 @@
 #include <libc.h>
 
-char buff[24];
+// NOTA: Ho faig variable (i no "define") per demo que tambe puc accedir a DATA
+// NOTA: No es exactament 8 perque ja fem servir una pagina inicial i pot ser que compilador per culpa de offset acabi necessitan mes pagines
+int NUM_SLOTS = 5;  // Num pag. a comprovar (> 5 --> page_fault)
 
-int pid;
-
-int __attribute__ ((__section__(".text.main")))
-  main(void)
+void write_text(const char *msg)
 {
-    /* Next line, tries to move value 0 to CR3 register. This register is a privileged one, and so it will raise an exception */
-     /* __asm__ __volatile__ ("mov %0, %%cr3"::"r" (0) ); */
+  write(1, (char*)msg, strlen((char*)msg));
+}
 
+void write_line(const char *msg)
+{
+  write_text(msg);
+  write(1, "\n", 1);
+}
+
+void test_slot(int depth)
+{
+  volatile char page[4096];  // IMPO: Que sigui volatile perque sino compilador optimitza
+
+  page[0] = 'p';
+  page[sizeof(page) - 1] = 'a';
+
+  // Fer recursivitat
+  if (depth > 0)
+  {
+    test_slot(depth-1);
+    page[(sizeof(page) - 1)/2] = 'u';
+  }
+}
+
+void test_stack(const char *tag)
+{
+  write_text(tag);
+  write_line(": stack realloc test");
+
+  test_slot(NUM_SLOTS);
+
+  write_text(tag);
+  write_line(": SUCCESS");
+}
+
+void thread_func(void *arg)
+{
+  test_stack((const char *) arg);
+  write_text((const char *) arg);
+  write_line(": exiting");
+}
+
+int __attribute__ ((__section__(".text.main"))) main(void)
+{
+  int tid;
+  int pid;
+  char buf[64];
+
+  write_line("MAIN: Check stack slot");
+  test_stack("MAIN");
+
+  tid = ThreadCreate(thread_func, "THREAD 1");
+  if (tid < 0)
+  {
+    write_line("ERROR: Creating base thread");
+  }
+  else
+  {
+    itoa(tid, buf);
+    write_text("SUCCESS: Thread created -> ");
+    write_text(buf);
+    write_line("");
+  }
+
+  pid = fork();
+  if (pid == 0)
+  {
+    write_line("THREAD 0 (CHILD): entering test");
+    test_stack("THREAD 0 (CHILD)");
+    ThreadCreate(thread_func, "THREAD 0 (CHILD)");
+  }
+  else if (pid > 0)
+  {
+    write_line("THREAD 0 (FATHER): fork done");
+    test_stack("THREAD 0 (FATHER)");
+  }
+  else
+  {
+    write_line("ERROR: fork failed");
+  }
+  
   while(1) { }
 }
