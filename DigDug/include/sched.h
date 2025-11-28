@@ -13,9 +13,16 @@
 
 #define NR_TASKS      10
 #define KERNEL_STACK_SIZE	1024
-#define THREAD_STACK_SLOT_NONE 0xFFFFFFFFu    /* No esta en Slot com a tal (INIT, IDLE) */
+#define THREAD_STACK_SLOT_NONE 0xFFFFFFFF    /* No esta en Slot com a tal (INIT, IDLE) */
 
 enum state_t { ST_RUN, ST_READY, ST_BLOCKED };
+
+struct thread_group
+{
+  int active;
+  unsigned int slot_mask;
+  struct list_head members;
+};
 
 struct task_struct 
 {
@@ -34,10 +41,7 @@ struct task_struct
   unsigned int TID;
 
   unsigned int slot_num;    /* Num del slot */
-  unsigned int slot_mask;   /* Veure EXPLICACIO */
-  
-  struct task_struct *initial_thread;  /* Veure EXPLICACIO */
-  struct list_head thread_list;
+  struct thread_group *group;
   struct list_head thread_node;
 };
 
@@ -92,13 +96,16 @@ void update_sched_data_rr();
 
 void init_stats(struct stats *s);
 
-void set_slot_status(struct task_struct *t, unsigned int slot, unsigned int value);
 unsigned int get_slot_init_page(unsigned int slot);
 unsigned int get_slot_limit_page(unsigned int slot);
 
-struct task_struct *task_initial_thread(struct task_struct *t);
 int task_alloc_stack_slot(struct task_struct *t);
 int task_alloc_specific_stack_slot(struct task_struct *t, unsigned int slot);
 void task_release_stack_slot(struct task_struct *t);
+
+struct thread_group *thread_group_create(void);
+void thread_group_destroy(struct thread_group *group);
+void thread_group_add_task(struct thread_group *group, struct task_struct *task);
+void thread_group_remove_task(struct task_struct *task);
 
 #endif  /* __SCHED_H__ */

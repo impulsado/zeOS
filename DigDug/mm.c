@@ -235,12 +235,8 @@ void free_user_pages( struct task_struct *task )
  page_table_entry * process_PT =  get_PT(task);
     /* DATA */
  for (pag=0;pag<NUM_PAG_DATA;pag++){
-   unsigned int logical = PAG_LOG_INIT_DATA + pag;
-   if (process_PT[logical].bits.present)
-   {
-	 free_frame(process_PT[logical].bits.pbase_addr);
-         process_PT[logical].entry = 0;
-   }
+	 free_frame(process_PT[PAG_LOG_INIT_DATA+pag].bits.pbase_addr);
+         process_PT[PAG_LOG_INIT_DATA+pag].entry = 0;
  }
 }
 

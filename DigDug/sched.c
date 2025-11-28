@@ -35,6 +35,53 @@ struct list_head freequeue;
 // Ready queue
 struct list_head readyqueue;
 
+struct thread_group thread_groups[NR_TASKS];
+
+struct thread_group *thread_group_create(void)
+{
+  for (int i = 0; i < NR_TASKS; ++i)
+  {
+    if (thread_groups[i].active)
+      continue;
+
+    thread_groups[i].active = 1;
+    INIT_LIST_HEAD(&thread_groups[i].members);
+    thread_groups[i].slot_mask = 0;
+    return &thread_groups[i];
+  }
+  return NULL;
+}
+
+void thread_group_destroy(struct thread_group *group)
+{
+  if (group == NULL)
+    return;
+
+  group->active = 0;
+  group->slot_mask = 0;
+  INIT_LIST_HEAD(&group->members);
+}
+
+void thread_group_add_task(struct thread_group *group, struct task_struct *task)
+{
+  if (group == NULL || task == NULL)
+    return;
+
+  task->group = group;
+  INIT_LIST_HEAD(&(task->thread_node));
+  list_add_tail(&(task->thread_node), &group->members);
+}
+
+void thread_group_remove_task(struct task_struct *task)
+{
+  if (task == NULL || task->group == NULL)
+    return;
+
+  list_del(&(task->thread_node));
+  INIT_LIST_HEAD(&(task->thread_node));
+  task->group = NULL;
+}
+
 void init_stats(struct stats *s)
 {
 	s->user_ticks = 0;
@@ -175,12 +222,10 @@ void init_idle (void)
 
   // Iniciar threads 
   // NOTA: No es fara servir perque no saltem a mode usuari. Pero per seguretat.
-  c->initial_thread=c;
-  INIT_LIST_HEAD(&c->thread_list);
+  c->group = NULL;
   INIT_LIST_HEAD(&c->thread_node);
   c->TID=0;
   c->slot_num=THREAD_STACK_SLOT_NONE;
-  c->slot_mask=0;
 
   uc->stack[KERNEL_STACK_SIZE-1]=(unsigned long)&cpu_idle; /* Return address */
   uc->stack[KERNEL_STACK_SIZE-2]=0; /* register ebp */
@@ -214,11 +259,11 @@ void init_task1(void)
   set_user_pages(c);
 
   // Iniciar threads
-  c->initial_thread=c;
-  INIT_LIST_HEAD(&c->thread_list);
-  INIT_LIST_HEAD(&c->thread_node);
+  struct thread_group *group = thread_group_create();
+  if (group == NULL)
+    return;
+  thread_group_add_task(group, c);
   c->TID=0;
-  c->slot_mask=0;
   c->slot_num=THREAD_STACK_SLOT_NONE;
   task_alloc_specific_stack_slot(c, 0);  // NOTA: Aixo no pot fallar
 
@@ -238,12 +283,10 @@ void init_freequeue()
   for (i=0; i<NR_TASKS; i++)
   {
     task[i].task.PID=-1;
-    task[i].task.initial_thread=NULL;
-    INIT_LIST_HEAD(&(task[i].task.thread_list));
+    task[i].task.group=NULL;
     INIT_LIST_HEAD(&(task[i].task.thread_node));
     task[i].task.TID=0;
     task[i].task.slot_num=THREAD_STACK_SLOT_NONE;
-    task[i].task.slot_mask=0;
     list_add_tail(&(task[i].task.list), &freequeue);
   }
 }
@@ -264,15 +307,6 @@ struct task_struct* current()
 struct task_struct* list_head_to_task_struct(struct list_head *l)
 {
   return (struct task_struct*)((int)l&0xfffff000);
-}
-
-struct task_struct *task_initial_thread(struct task_struct *t)
-{
-  if (t == NULL) 
-    return NULL;
-  if (t->initial_thread != NULL) 
-    return t->initial_thread;
-  return t;
 }
 
 /* Do the magic of a task switch */
@@ -304,11 +338,16 @@ static unsigned int get_slot_status(unsigned int mask, unsigned int slot)
   return (mask>>slot) & 1;
 }
 
-void set_slot_status(struct task_struct *t, unsigned int slot, unsigned int value)
+static void set_slot_status(struct thread_group *group, unsigned int slot, unsigned int value)
 {
+  // === BASE CASE
+  if (group == NULL)
+    return;
+
+  // === GENERAL CASE
   unsigned int bit_pos = 1 << slot;
-  unsigned int mask = t->slot_mask & ~bit_pos;  // Ficar nomes el bit en la posicio a 0
-  t->slot_mask = (mask | (value << slot));  // Assignar al bit el valor
+  unsigned int mask = group->slot_mask & ~bit_pos;  // Ficar nomes el bit en la posicio a 0
+  group->slot_mask = (mask | (value << slot));  // Assignar al bit el valor
 }
 
 unsigned int get_slot_init_page(unsigned int slot)
@@ -347,9 +386,8 @@ static int map_stack_page(struct task_struct *t, unsigned int logical_page)
 int task_alloc_stack_slot(struct task_struct *t)
 {
   // === BASE CASE
-  // No te master_thread 
-  struct task_struct *master_thread = task_initial_thread(t);
-  if (master_thread == NULL) 
+  struct thread_group *group = t->group;
+  if (group == NULL) 
     return -EINVAL;
 
   // === GENERAL CASE
@@ -357,7 +395,7 @@ int task_alloc_stack_slot(struct task_struct *t)
   unsigned int slot = THREAD_STACK_SLOT_NONE;
   for (unsigned int i = 0; i < THREAD_MAX_STACK_SLOTS; i++)
   {
-    if (!get_slot_status(master_thread->slot_mask, i))
+    if (!get_slot_status(group->slot_mask, i))
     {
       slot = i;
       break;
@@ -374,14 +412,12 @@ int task_alloc_stack_slot(struct task_struct *t)
 int task_alloc_specific_stack_slot(struct task_struct *t, unsigned int slot)
 {
   // === BASE CASE
-  struct task_struct *master_thread = task_initial_thread(t);
-  
-  // Esta malament creat
-  if (master_thread == NULL) 
+  struct thread_group *group = t->group;
+  if (group == NULL) 
     return -EINVAL;
 
   // IDLE no te slot (es kernel mode)
-  if (master_thread->PID == 0) 
+  if (t->PID == 0) 
     return -EINVAL;
 
   // Num de slot invalid
@@ -389,20 +425,20 @@ int task_alloc_specific_stack_slot(struct task_struct *t, unsigned int slot)
     return -EINVAL;
 
   // Ja esta ocupat
-  if (get_slot_status(master_thread->slot_mask, slot)) 
+  if (get_slot_status(group->slot_mask, slot)) 
     return -EBUSY;
 
   // === GENERAL CASE
   // Assignar num slot
   t->slot_num = slot;
-  set_slot_status(master_thread, slot, 1);
+  set_slot_status(group, slot, 1);
 
   // Mappeig de la primera pagina del slot
   unsigned int init_page = get_slot_init_page(slot);
-  int ret = map_stack_page(master_thread, init_page);
+  int ret = map_stack_page(t, init_page);
   if (ret < 0)
   {
-    set_slot_status(master_thread, slot, 0);
+    set_slot_status(group, slot, 0);
     t->slot_num = THREAD_STACK_SLOT_NONE;
   }
   return ret;
@@ -411,9 +447,8 @@ int task_alloc_specific_stack_slot(struct task_struct *t, unsigned int slot)
 void task_release_stack_slot(struct task_struct *t)
 {
   // === BASE CASE
-  // No te master (error)
-  struct task_struct *master_thread = task_initial_thread(t);
-  if (master_thread == NULL)
+  struct thread_group *group = t->group;
+  if (group == NULL)
     return;
 
   // No esta assignat a cap slot
@@ -422,7 +457,7 @@ void task_release_stack_slot(struct task_struct *t)
 
   // === GENERAL CASE
   unsigned int slot = t->slot_num;
-  page_table_entry *process_PT = get_PT(master_thread);
+  page_table_entry *process_PT = get_PT(t);
   unsigned int upper_page = get_slot_init_page(slot);
   unsigned int lower_page = get_slot_limit_page(slot);
   
@@ -438,8 +473,8 @@ void task_release_stack_slot(struct task_struct *t)
   }
 
   // Fer flush de TLB
-  set_cr3(get_DIR(master_thread));
+  set_cr3(get_DIR(t));
 
-  set_slot_status(master_thread, slot, 0);
+  set_slot_status(group, slot, 0);
   t->slot_num = THREAD_STACK_SLOT_NONE;
 }

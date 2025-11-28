@@ -165,7 +165,24 @@ invalid_addr:
   char buff[9];
   itohex(fault_addr, buff);
   printk(buff);
+  printk(" PID=0x");
+  itohex(curr->PID, buff);
+  printk(buff);
+
+  printk(" TID=0x");
+  itohex(curr->TID, buff);
+  printk(buff);
+
+  printk(" slot=0x");
+  itohex(curr->slot_num, buff);
+  printk(buff);
+
+  printk(" page=0x");
+  itohex(page, buff);
+  printk(buff);
+
   printk("\n");
-  
+
   while(1);
+
 }

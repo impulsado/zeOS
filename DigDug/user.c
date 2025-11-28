@@ -50,32 +50,31 @@ void thread_func(void *arg)
 
 int __attribute__ ((__section__(".text.main"))) main(void)
 {
-  int tid;
+  int ret;
   int pid;
   char buf[64];
 
   write_line("MAIN: Check stack slot");
   test_stack("MAIN");
 
-  tid = ThreadCreate(thread_func, "THREAD 1");
-  if (tid < 0)
+  /*
+  ret = ThreadCreate(thread_func, "THREAD 1");
+  if (ret < 0)
   {
     write_line("ERROR: Creating base thread");
   }
   else
   {
-    itoa(tid, buf);
-    write_text("SUCCESS: Thread created -> ");
-    write_text(buf);
-    write_line("");
+    write_line("SUCCESS: Thread created");
   }
-
+  */
+  
   pid = fork();
   if (pid == 0)
   {
     write_line("THREAD 0 (CHILD): entering test");
     test_stack("THREAD 0 (CHILD)");
-    ThreadCreate(thread_func, "THREAD 0 (CHILD)");
+    //ThreadCreate(thread_func, "THREAD 0 (CHILD)");
   }
   else if (pid > 0)
   {
