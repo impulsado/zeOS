@@ -391,7 +391,8 @@ int sys_ThreadCreate(void (*function)(void* arg), void* parameter, void (*_wrapp
   //if (parameter && !access_ok(VERIFY_READ, _wrapper, sizeof(void (*)(void *)))) return -EFAULT;
 
   // Hi ha algun TCB(PCB) dispo
-  if (list_empty(&freequeue)) return -ENOMEM;
+  if (list_empty(&freequeue)) 
+    return -ENOMEM;
 
   // === GENERAL CASE
   // Obtindre TCB
@@ -437,20 +438,20 @@ int sys_ThreadCreate(void (*function)(void* arg), void* parameter, void (*_wrapp
   // NOTA: Fer "--i" i no "i--" perque en la primera versio decrementem abans d'accedir
   // NOTA: Faig aquesta implementacio per aixo no haver de calcular USER_STACK_SIZE
   unsigned int init_page = get_slot_init_page(new_task->slot_num);
-
-  DWord *user_esp = (DWord *)((init_page + 1) << 12);
-  *(--user_esp) = (DWord)parameter;  // user_stack[SIZE - 1] =  param
-  *(--user_esp) = (DWord)function; // user_stack[SIZE - 2] = func
-  *(--user_esp) = 0;  // user_stack[SIZE - 3] = ebp trash 
+  unsigned int slot_top = (init_page + 1) << 12;
+  DWord *user_esp = (DWord *)(slot_top);
+  *(--user_esp) = (DWord)parameter;
+  *(--user_esp) = (DWord)function;
+  *(--user_esp) = 0;  // Offset per a ThreadWrapper return address
 
   // Preparar la pila sistema
-  // OBS: Fem servir el ret_from_fork i au
   DWord *kernel_stack = new_union->stack;
-  //kernel_stack[KERNEL_STACK_SIZE - 19] = 0;  // ebp_trash
-  //kernel_stack[KERNEL_STACK_SIZE - 18] = (DWord)&ret_from_fork;
-  kernel_stack[KERNEL_STACK_SIZE - 5] = (DWord)_wrapper;  // user_eip
-  kernel_stack[KERNEL_STACK_SIZE - 2] = *user_esp;  // user_esp
-  new_task->register_esp = (int)&kernel_stack[KERNEL_STACK_SIZE - 18];
+  kernel_stack[KERNEL_STACK_SIZE - 5] = (DWord)_wrapper;        // user_eip
+  kernel_stack[KERNEL_STACK_SIZE - 2] = (DWord)user_esp;        // user_esp
+
+  DWord register_ebp = (DWord)get_ebp();
+  register_ebp = (register_ebp - (DWord)current()) + (DWord)new_task;
+  new_task->register_esp = register_ebp;
 
   // Encolar nou thread a readyqueue
   list_add_tail(&(new_task->list), &readyqueue);

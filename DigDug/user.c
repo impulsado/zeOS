@@ -2,7 +2,7 @@
 
 // NOTA: Ho faig variable (i no "define") per demo que tambe puc accedir a DATA
 // NOTA: No es exactament 8 perque ja fem servir una pagina inicial i pot ser que compilador per culpa de offset acabi necessitan mes pagines
-int NUM_SLOTS = 5;  // Num pag. a comprovar (> 5 --> page_fault)
+int NUM_SLOTS = 4;  // Num pag. a comprovar (> 5 --> page_fault)
 
 void write_text(const char *msg)
 {
@@ -52,12 +52,10 @@ int __attribute__ ((__section__(".text.main"))) main(void)
 {
   int ret;
   int pid;
-  char buf[64];
 
   write_line("MAIN: Check stack slot");
   test_stack("MAIN");
 
-  /*
   ret = ThreadCreate(thread_func, "THREAD 1");
   if (ret < 0)
   {
@@ -67,7 +65,6 @@ int __attribute__ ((__section__(".text.main"))) main(void)
   {
     write_line("SUCCESS: Thread created");
   }
-  */
   
   pid = fork();
   if (pid == 0)
