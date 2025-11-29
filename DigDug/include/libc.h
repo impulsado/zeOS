@@ -8,7 +8,9 @@
 
 #include <stats.h>
 
-extern int errno;
+// NOTA: Aquest truc de fer-ho aixi m'ho ha dit el ChatGPT.
+int *__errno_location(void);
+#define errno (*__errno_location())
 
 int write(int fd, char *buffer, int size);
 

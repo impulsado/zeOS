@@ -102,6 +102,7 @@ unsigned int get_slot_limit_page(unsigned int slot);
 int task_alloc_stack_slot(struct task_struct *t);
 int task_alloc_specific_stack_slot(struct task_struct *t, unsigned int slot);
 void task_release_stack_slot(struct task_struct *t);
+void task_reset_tls_area(struct task_struct *t);
 
 struct thread_group *thread_group_create(void);
 void thread_group_destroy(struct thread_group *group);

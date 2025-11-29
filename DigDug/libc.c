@@ -5,8 +5,31 @@
 #include <libc.h>
 
 #include <types.h>
+#include <mm_address.h>
+#include <tls.h>
 
-int errno;
+struct tls_block *get_tls_block(void)
+{
+  // 1. Saber el "esp" actual
+  volatile unsigned int temp = 0;  // IMPO: No vull que el compilador optimitzi o faci servir un reg, vull que guardi espai en stack
+  unsigned int sp = (unsigned int)&temp;
+  
+  // 2. Saber en quin slot esta el thread
+  unsigned int page = sp >> 12;
+  if (page < THREAD_STACK_REGION_FIRST_PAGE) return 0;
+  unsigned int relative = page - THREAD_STACK_REGION_FIRST_PAGE;
+  unsigned int slot = relative / THREAD_STACK_SLOT_PAGES;
+
+  // 3. Retornar la direccio
+  unsigned int tls_addr = THREAD_TLS_VADDR(slot);
+  return (struct tls_block *)tls_addr;
+}
+
+int *__errno_location(void)
+{
+  return &get_tls_block()->errno_value;
+}
+
 int REGS[7]; // Space to save REGISTERS
 
 void itoa(int a, char *b)

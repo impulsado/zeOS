@@ -1,6 +1,8 @@
 #ifndef MM_ADDRESS_H
 #define MM_ADDRESS_H
 
+#include <tls.h>
+
 #define ENTRY_DIR_PAGES 0
 
 #define TOTAL_PAGES 1024
@@ -12,12 +14,16 @@
 #define NUM_PAG_DATA 20
 #define PAGE_SIZE 0x1000
 
-#define THREAD_STACK_SLOT_PAGES 8           /* Cada thread nou rep un bloc de 8 pagines */
+#define THREAD_STACK_SLOT_PAGES 8 /* Cada thread nou rep un bloc de 8 pagines */
+#define THREAD_STACK_SLOT_SIZE (THREAD_STACK_SLOT_PAGES * PAGE_SIZE)
+#define THREAD_TLS_SIZE (sizeof(struct tls_block))
 #define THREAD_MAX_STACK_SLOTS NR_TASKS - 2 /* Nombre de slots que podrem assignar (treure idle que no te threads i el init (thread0))*/
 
-#define THREAD_STACK_REGION_FIRST_PAGE (PAG_LOG_INIT_DATA + NUM_PAG_DATA)                                           /* Delimitar on comencen els slots*/
-#define THREAD_STACK_SLOT_LIMIT_PAGE(slot) (THREAD_STACK_REGION_FIRST_PAGE + ((slot) * THREAD_STACK_SLOT_PAGES))     /* Delimitar tope del slot (limit) */
-#define THREAD_STACK_SLOT_INIT_PAGE(slot) (THREAD_STACK_SLOT_LIMIT_PAGE(slot) + THREAD_STACK_SLOT_PAGES - 1)        /* Delimitar inici del slot */
+#define THREAD_STACK_REGION_FIRST_PAGE (PAG_LOG_INIT_DATA + NUM_PAG_DATA)                                        /* Delimitar on comencen els slots*/
+#define THREAD_STACK_SLOT_LIMIT_PAGE(slot) (THREAD_STACK_REGION_FIRST_PAGE + ((slot) * THREAD_STACK_SLOT_PAGES)) /* Delimitar tope del slot (limit) */
+#define THREAD_STACK_SLOT_INIT_PAGE(slot) (THREAD_STACK_SLOT_LIMIT_PAGE(slot) + THREAD_STACK_SLOT_PAGES - 1)     /* Delimitar inici del slot */
+#define THREAD_STACK_SLOT_TOP_ADDR(slot) (((THREAD_STACK_SLOT_INIT_PAGE(slot) + 1) << 12))                       /* Dir immediata sobre el slot (limit del seguent slot) */
+#define THREAD_TLS_VADDR(slot) (THREAD_STACK_SLOT_TOP_ADDR(slot) - THREAD_TLS_SIZE)
 
 #define PAG_LOG_INIT_FREE (THREAD_STACK_SLOT_LIMIT_PAGE(THREAD_MAX_STACK_SLOTS))
 

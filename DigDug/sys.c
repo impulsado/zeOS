@@ -17,6 +17,8 @@
 
 #include <errno.h>
 
+#include <tls.h>
+
 #define LECTURA 0
 #define ESCRIPTURA 1
 
@@ -432,22 +434,19 @@ int sys_ThreadCreate(void (*function)(void* arg), void* parameter, void (*_wrapp
     return ret;
   }
 
-  // Preparar la pila usuari
-  // NOTA: Accedir a la init_page+1 per agafar la @limit del seguent slot == @bottom del slot previ (el que volem)
-  // OBS: Aixo es possible perque son sequencial
+  // Preparar la pila usuari just per sota del bloc TLS
   // NOTA: Fer "--i" i no "i--" perque en la primera versio decrementem abans d'accedir
   // NOTA: Faig aquesta implementacio per aixo no haver de calcular USER_STACK_SIZE
-  unsigned int init_page = get_slot_init_page(new_task->slot_num);
-  unsigned int slot_top = (init_page + 1) << 12;
-  DWord *user_esp = (DWord *)(slot_top);
+  // IMPO: Parteixo d'on comensa el TLS per aixi no trepitjar res 
+  DWord *user_esp = (DWord *)(THREAD_TLS_VADDR(new_task->slot_num));
   *(--user_esp) = (DWord)parameter;
   *(--user_esp) = (DWord)function;
-  *(--user_esp) = 0;  // Offset per a ThreadWrapper return address
+  *(--user_esp) = 0;  // Offset per a ThreadWrapper (que pugui accedir a "function" com a parametre)
 
   // Preparar la pila sistema
   DWord *kernel_stack = new_union->stack;
-  kernel_stack[KERNEL_STACK_SIZE - 5] = (DWord)_wrapper;        // user_eip
-  kernel_stack[KERNEL_STACK_SIZE - 2] = (DWord)user_esp;        // user_esp
+  kernel_stack[KERNEL_STACK_SIZE - 5] = (DWord)_wrapper;  // user_eip
+  kernel_stack[KERNEL_STACK_SIZE - 2] = (DWord)user_esp;  // user_esp
 
   DWord register_ebp = (DWord)get_ebp();
   register_ebp = (register_ebp - (DWord)current()) + (DWord)new_task;
@@ -456,7 +455,7 @@ int sys_ThreadCreate(void (*function)(void* arg), void* parameter, void (*_wrapp
   // Encolar nou thread a readyqueue
   list_add_tail(&(new_task->list), &readyqueue);
 
-  return new_task->TID;
+  return 0;  // POSIX
 }
 
 void sys_ThreadExit(void)

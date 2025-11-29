@@ -33,7 +33,11 @@ ENTRY(write)
 /* Common code for negative return */
 nok:
 	neg %eax
-	mov %eax, errno
+	pushl %eax
+	call __errno_location
+	movl %eax, %ecx;  // &(tls->errno)
+	popl %eax
+	movl %eax, (%ecx); // *(tls->errno) = error_ret_value
 	mov $-1, %eax
 	popl %ebp
 	ret

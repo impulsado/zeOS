@@ -82,6 +82,17 @@ void thread_group_remove_task(struct task_struct *task)
   task->group = NULL;
 }
 
+void task_reset_tls_area(struct task_struct *t)
+{
+  // === BASE CASE
+  if (t == NULL || t->slot_num == THREAD_STACK_SLOT_NONE)
+    return;
+
+  // === GENERAL CASE
+  unsigned char *tls_base = (unsigned char *)THREAD_TLS_VADDR(t->slot_num);
+  memset(tls_base, 0, THREAD_TLS_SIZE);  // Ficar a 0 podem pensar com reservar-ho
+}
+
 void init_stats(struct stats *s)
 {
 	s->user_ticks = 0;
@@ -440,8 +451,11 @@ int task_alloc_specific_stack_slot(struct task_struct *t, unsigned int slot)
   {
     set_slot_status(group, slot, 0);
     t->slot_num = THREAD_STACK_SLOT_NONE;
+    return ret;
   }
-  return ret;
+
+  task_reset_tls_area(t);
+  return 0;
 }
 
 void task_release_stack_slot(struct task_struct *t)
