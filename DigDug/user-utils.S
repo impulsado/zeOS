@@ -100,7 +100,7 @@ ENTRY(get_stats)
 	call syscall_sysenter
 	popl %ebx
 	test %eax, %eax
-	js nok	// if (eax < 0) -->
+	js nok;	// if (eax < 0) -->
 	popl %ebp
 	ret
 
@@ -116,7 +116,7 @@ ENTRY(ThreadCreate)
 	call syscall_sysenter
 	popl %ebx
 	test %eax, %eax
-	js nok	// if (eax < 0) -->
+	js nok;	// if (eax < 0) -->
 	popl %ebp
 	ret
 
@@ -126,5 +126,52 @@ ENTRY(ThreadExit)
 	movl %esp, %ebp
 	movl $6, %eax
 	call syscall_sysenter
+	popl %ebp
+	ret
+
+/* int KeyboardEvent(void (*func)(char key, int pressed)) */
+/* NOTA: Internament passa KeyboardWrapper com a segon parametre */
+ENTRY(KeyboardEvent)
+	pushl %ebp
+	movl %esp, %ebp
+	pushl %ebx;  // Save EBX
+	movl $36, %eax
+	movl 8(%ebp), %ebx;  // func
+	movl $KeyboardWrapper, %ecx;  // wrapper (igual que thread)
+	call syscall_sysenter
+	popl %ebx
+	test %eax, %eax
+	js nok;	// if (eax < 0) -->
+	popl %ebp
+	ret
+
+/* void KeyboardWrapper(void (*func)(char, int), char key, int pressed) */
+/* NOTA: Necessari per poder cridar, despres d'executar funcio usuari, "int 0x2b" */
+/* IMPO: Aqui guardem els parametres cap adalt perque sino quan fem el call afegeix la @ret i aixo ja fa +8 per al offset del primer param*/
+/* IMPO: func es un punter a una funcio, llavors no serveix en accedir a la mem */
+ENTRY(KeyboardWrapper)
+	pushl %ebp
+	movl %esp, %ebp
+	
+	/* Preparar arguments per cridar func(key, pressed) */
+	/*
+		|	 ebp_old	| <- ebp
+		| 		0		|
+		|	  func		|
+		|	  key		|
+		|	pressed		|
+		|---------------| <- @Fin de la TLS
+	*/
+	pushl 16(%ebp);  // pressed
+	pushl 12(%ebp);  // key
+	movl 8(%ebp), %eax;  // func
+
+	call %eax;
+	addl $8, %esp
+	
+	/* Tornar al context original */
+	int $0x2b
+	
+	/* No arribem aqui, pero per seguretat */
 	popl %ebp
 	ret

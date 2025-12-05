@@ -88,10 +88,15 @@ ENTRY(keyboard_handler)
       call user_to_system;
       popl %eax;
       EOI
-      call keyboard_routine;
-      pushl %eax;
+      
+      pushl %esp;  // Dir on esta el {HW,SW}_ctx a l'hora de guardar
+      call keyboard_routine
+      addl $4, %esp
+      
+      /* NOTA: Aqui ara saltarem a wrapper que cridara a la funcio especificada per l'usuari (si config) */
+      pushl %eax
       call system_to_user;
-      popl %eax;
+      popl %eax
       RESTORE_ALL
       iret;
 
@@ -133,4 +138,22 @@ ENTRY(page_fault_handler_new)
       popl %eax
       RESTORE_ALL
       addl $4, %esp;  // treure error (afegit automaticament)
+      iret
+
+/* Handler per int 0x2b (Retorn del keyboard event) */
+ENTRY(keyboard_return_handler)
+      SAVE_ALL
+      pushl %eax
+      call user_to_system
+      popl %eax
+      
+      pushl %esp;  // Passar esp per poder restaurar el contexte actual amb el que 
+      call keyboard_return_routine
+      addl $4, %esp
+
+      /* NOTA: Aqui retorno  */      
+      pushl %eax
+      call system_to_user
+      popl %eax
+      RESTORE_ALL
       iret

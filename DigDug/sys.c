@@ -30,6 +30,14 @@ void * get_ebp();
 #define TEMP_STACK_COPY_BASE (TOTAL_PAGES - THREAD_STACK_SLOT_PAGES)
 #define TEMP_DATA_COPY_PAGE (TEMP_STACK_COPY_BASE - 1)
 
+// Macro per comprovar si estem en un event de teclat
+// NOTA: Aquesta sintaxis me l'ha dit el ChatGPT
+#define CHECK_KEYBOARD_EVENT() \
+  do { \
+    if (current()->in_keyboard_event) \
+      return -EINPROGRESS; \
+  } while(0)
+
 static int clone_stack_slot_pages(struct task_struct *father, struct task_struct *child)
 {
   // === BASE CASE
@@ -92,6 +100,7 @@ static int clone_stack_slot_pages(struct task_struct *father, struct task_struct
 
 void sys_exit()
 {  
+  // TODO: Preguntar al profe si exit deuria de funcionar o tambe ho comprovo
   struct task_struct *curr = current();
   struct thread_group *group = curr->group;
 
@@ -107,14 +116,18 @@ void sys_exit()
   }
 
   // === GENERAL CASE
+  // Alliberar keyboard_info del proces
+  kbd_info_free(curr->kbd_info);
+
   // Matar tots els threads del process
   struct list_head *pos;
   struct list_head *tmp;
   list_for_each_safe(pos, tmp, &(group->members))
   {
     struct task_struct *thread = list_entry(pos, struct task_struct, thread_node);
-    list_del(&(thread->list));  // Eliminar de la readyqueue si estava. Si estava en freequeue despres la torno a afegir
-    task_release_stack_slot(thread);
+    list_del(&(thread->list));
+    thread_release_stack_slot(thread);
+    thread->kbd_info = NULL;
     thread_group_remove_task(thread);
     thread->PID = -1;
     thread->TID = 0;
@@ -122,7 +135,7 @@ void sys_exit()
   }
 
   free_user_pages(curr);
-  thread_group_destroy(group);
+  thread_group_free(group);
 
   // Forsar canvi
   sched_next_rr();
@@ -165,8 +178,10 @@ int sys_fork(void)
   struct list_head *lhcurrent = NULL;
   union task_union *uchild;
   struct task_struct *father = current();
-  
   // === BASE CASE
+  // Comprovar si estem en event de teclat
+  CHECK_KEYBOARD_EVENT();
+
   // No hi ha cap TCB lliure
   if (list_empty(&freequeue)) return -ENOMEM;
 
@@ -256,7 +271,7 @@ int sys_fork(void)
 
   // Assignar informacio general al fill
   INIT_LIST_HEAD(&(uchild->task.thread_node));
-  struct thread_group *group = thread_group_create();  // Creem un grup perque ja es indpendent al pare
+  struct thread_group *group = thread_group_alloc();  // Creem un grup perque ja es indpendent al pare
   if (group == NULL)
   {
     free_user_pages(&(uchild->task));
@@ -264,14 +279,20 @@ int sys_fork(void)
     return -EAGAIN;
   }
   thread_group_add_task(group, &(uchild->task));
-  uchild->task.slot_num = THREAD_STACK_SLOT_NONE;  // Seguretat
+  uchild->task.slot_num = THREAD_STACK_SLOT_NONE;
+
+  // Reservar keyboard_info pel nou proces
+  struct keyboard_info *kbd = kbd_info_alloc();
+  uchild->task.kbd_info = kbd;
+  uchild->task.in_keyboard_event = 0;
   
   // Assignar slot a fill (Ha de ser mateix num que pare)
-  slot_result = task_alloc_specific_stack_slot(&(uchild->task), father->slot_num);
+  slot_result = thread_alloc_specific_stack_slot(&(uchild->task), father->slot_num);
   if (slot_result < 0)
   {
+    kbd_info_free(uchild->task.kbd_info);
     thread_group_remove_task(&(uchild->task));
-    thread_group_destroy(uchild->task.group);
+    thread_group_free(uchild->task.group);
     free_user_pages(&(uchild->task));
     list_add_tail(lhcurrent, &freequeue);
     return slot_result;
@@ -281,9 +302,10 @@ int sys_fork(void)
   slot_result = clone_stack_slot_pages(father, &(uchild->task));
   if (slot_result < 0)
   {
-    task_release_stack_slot(&(uchild->task));
+    thread_release_stack_slot(&(uchild->task));
+    kbd_info_free(uchild->task.kbd_info);
     thread_group_remove_task(&(uchild->task));
-    thread_group_destroy(uchild->task.group);
+    thread_group_free(uchild->task.group);
     free_user_pages(&(uchild->task));
     list_add_tail(lhcurrent, &freequeue);
     return slot_result;
@@ -325,6 +347,8 @@ char localbuffer [TAM_BUFFER];
 int bytes_left;
 int ret;
 
+	CHECK_KEYBOARD_EVENT();
+
 	if ((ret = check_fd(fd, ESCRIPTURA)))
 		return ret;
 	if (nbytes < 0)
@@ -358,6 +382,7 @@ int sys_gettime()
 /* System call to force a task switch */
 int sys_yield()
 {
+  CHECK_KEYBOARD_EVENT();
   force_task_switch();
   return 0;
 }
@@ -366,10 +391,13 @@ extern int remaining_quantum;
 
 int sys_get_stats(int pid, struct stats *st)
 {
-  int i;
+  // === BASE CASE
+  CHECK_KEYBOARD_EVENT();
   
   if (!access_ok(VERIFY_WRITE, st, sizeof(struct stats))) return -EFAULT; 
   
+  // === GENERAL CASE
+  int i;
   if (pid<0) return -EINVAL;
   for (i=0; i<NR_TASKS; i++)
   {
@@ -386,6 +414,9 @@ int sys_get_stats(int pid, struct stats *st)
 int sys_ThreadCreate(void (*function)(void* arg), void* parameter, void (*_wrapper)(void* arg))
 {
   // === BASE CASE
+  // Comprovar si estem en event de teclat
+  CHECK_KEYBOARD_EVENT();
+
   // Validar parametres
   // NOTA: Aixo ja petara en mode usuari (Dit pel profe)
   //if (function == NULL || _wrapper == NULL) return -EINVAL;
@@ -420,13 +451,14 @@ int sys_ThreadCreate(void (*function)(void* arg), void* parameter, void (*_wrapp
   new_task->state = ST_READY;
   new_task->group = NULL;
   new_task->slot_num = THREAD_STACK_SLOT_NONE;
+  new_task->in_keyboard_event = 0;
   INIT_LIST_HEAD(&new_task->thread_node);
 
   // Ficar al nou thread en el grup que li toca
   thread_group_add_task(group, new_task);
 
   // Assignar slot de user stack
-  int ret = task_alloc_stack_slot(new_task);
+  int ret = thread_alloc_stack_slot(new_task);
   if (ret < 0)
   {
     thread_group_remove_task(new_task);
@@ -481,7 +513,7 @@ void sys_ThreadExit(void)
 
   // === GENERAL CASE
   // Alliberar el slot assignat
-  task_release_stack_slot(curr);
+  thread_release_stack_slot(curr);
   thread_group_remove_task(curr);
   curr->PID = -1;
   // Assignar TCB(PCB) com a disponible
@@ -489,4 +521,23 @@ void sys_ThreadExit(void)
 
   // Forsar canvi de thread/process
   sched_next_rr();
+}
+
+int sys_KeyboardEvent(void (*func)(char key, int pressed), void *wrapper)
+{
+  // === BASE CASE
+  // Validar que no estem en un event de teclat
+  CHECK_KEYBOARD_EVENT();
+
+  // === GENERAL CASE
+  struct task_struct *curr = current();
+
+  if (curr->kbd_info == NULL)
+    return -EINVAL;
+
+  // === GENERAL CASE ===
+  curr->kbd_info->handler = func;
+  curr->kbd_info->wrapper = wrapper;
+
+  return 0;
 }

@@ -19,13 +19,17 @@
 #define THREAD_TLS_SIZE (sizeof(struct tls_block))
 #define THREAD_MAX_STACK_SLOTS NR_TASKS - 2 /* Nombre de slots que podrem assignar (treure idle que no te threads i el init (thread0))*/
 
+/* Slot reservat per al keyboard handler (fora del rang normal) */
+#define KBD_SLOT THREAD_MAX_STACK_SLOTS
+
 #define THREAD_STACK_REGION_FIRST_PAGE (PAG_LOG_INIT_DATA + NUM_PAG_DATA)                                        /* Delimitar on comencen els slots*/
 #define THREAD_STACK_SLOT_LIMIT_PAGE(slot) (THREAD_STACK_REGION_FIRST_PAGE + ((slot) * THREAD_STACK_SLOT_PAGES)) /* Delimitar tope del slot (limit) */
 #define THREAD_STACK_SLOT_INIT_PAGE(slot) (THREAD_STACK_SLOT_LIMIT_PAGE(slot) + THREAD_STACK_SLOT_PAGES - 1)     /* Delimitar inici del slot */
 #define THREAD_STACK_SLOT_TOP_ADDR(slot) (((THREAD_STACK_SLOT_INIT_PAGE(slot) + 1) << 12))                       /* Dir immediata sobre el slot (limit del seguent slot) */
 #define THREAD_TLS_VADDR(slot) (THREAD_STACK_SLOT_TOP_ADDR(slot) - THREAD_TLS_SIZE)
 
-#define PAG_LOG_INIT_FREE (THREAD_STACK_SLOT_LIMIT_PAGE(THREAD_MAX_STACK_SLOTS))
+/* Primera pagina lliure despres de tots els slots (incloent el de keyboard) */
+#define PAG_LOG_INIT_FREE (THREAD_STACK_SLOT_LIMIT_PAGE(KBD_SLOT + 1))
 
 /* Memory distribution */
 /***********************/

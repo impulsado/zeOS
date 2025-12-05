@@ -2,7 +2,7 @@
  * libc.h - macros per fer els traps amb diferents arguments
  *          definició de les crides a sistema
  */
- 
+
 #ifndef __LIBC_H__
 #define __LIBC_H__
 
@@ -30,8 +30,13 @@ int yield();
 
 int get_stats(int pid, struct stats *st);
 
-int ThreadCreate(void (*function)(void* arg), void* parameter);
+// === THREAD
+int ThreadCreate(void (*function)(void *arg), void *parameter);
 void ThreadExit(void);
-void ThreadWrapper(void (*function)(void* arg), void* parameter);
+void ThreadWrapper(void (*function)(void *arg), void *parameter);
 
-#endif  /* __LIBC_H__ */
+// === KEYBOARD
+int KeyboardEvent(void (*func)(char key, int pressed));
+void KeyboardWrapper(void (*func)(char, int), char key, int pressed);
+
+#endif /* __LIBC_H__ */
