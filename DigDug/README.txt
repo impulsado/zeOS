@@ -90,63 +90,98 @@ Modifiquem la pila de sistema per a saltar a ThreadWrapper
 IDEA
 ----
 "Volem que quan l'usuari premi una tecla --> S'executi una funcio."
+Aquesta funcio esta relacionada amb el process i no exclusiu del thread.
 El workflow que volem es algo aixi: "Usuari_main --> Sistema --> (Usuari_func) --> Sistema --> Usuari_main"
 Problemes principals:
 - PROBLEMA #1: Podriem crear recursivitat si dins "Usuari_func" arriba una altra lletra.
 - PROBLEMA #2: Com guardo la funcio d'usuari i l'executo perque surti correctament.
-- PROBLEMA #3: La pila d'usuari conviuen variables de "main" i les de "func".
+- PROBLEMA #3: Necessitem una pila nova per a la funcio que s'executa.
 - PROBLEMA #4: Hi ha dos contextes d'usuari: Usuari_main, Usuari_func.
+- PROBLEMA #5: Ha de ser global al process.
+
+
+NOVES ESTRUCTURES
+-----------------
+
+struct keyboard_info
+--------------------
+Idea similar al thread_group de la Milestone 1.
+Estructura comuna a tots els threads del process on es guarda al funcio i el wrapper que hem d'usar.
+D'aquesta forma aconseguim que sigui global a tots els processos.
 
 struct task_struct
 ------------------
 S'afegeixen els camps:
 - in_keyboard_event per solucionar "PROBLEMA #1"
-- keyboard_handler per solucionar "PROBLEMA 2,3,4"
-- keyboard_wrapper per solucionar "PROBLEMA #2"
+- *kbd_info per solucionar "PROBLEMA #5"
 - saved_ctx[5+11] per solucionar "PROBLEMA #4"
 
 La saved_ctx es un nou struct de "struct keyboard_context" on simplement guardem els contextes:
 - Hardware (5 REGs)
 - Software (11 REGs)
 No fa falta guardar res mes perque no ho necessitem (valors auxiliars de funcions de sistema es poden perdre)
+NOTA: Com que guardem informacio que no deuria de ser accessible desde mode usuari, la guardem en el union i aixi ja tenim seguretat.
 
-struct tls_block
-----------------
-S'afegeixen els camps:
-- char keyboard_aux_stack[KEYBOARD_AUX_STACK_SIZE] per solucionar "PROBLEMA #4"
-
-KEYBOARD_AUX_STACK_SIZE = 256 pel seguent motiu:
-- keyboard_handler: key + pressed + handler + off = 16B
-- keyboard_wrapper: key + pressed + %ebp = 12B
-- user_func: @ret + [...] = 4B + xB
-TOTAL = 32B + xB --> Per seguretat fiquem 256B i tindrem suficient (probablement)
 
 WORKFLOW
 --------
 1. Usuari registra funcio a executar quan keyboard event
-2. Quan hi ha una tecla salta el handler de teclat i:
-- Guarda el ctx usuari en PCB
-- Crea la pila auxiliar per user_func
-- Marcar que dins tractament
+
+2. Quan hi ha una tecla salta el handler de teclat que:
+2.1. Reservar un slot (com els implementats en Thread) temporal per a la funcio
+2.2. Guarda el ctx usuari en PCB
+2.3. Crea la pila auxiliar per user_func
+2.4. Modificar el contexte hardware perque "torni" al wrapper en comptes de al codi principal de l'usuari 
+2.5. Marcar que dins tractament
+
 3. Saltem a keyboard_wrapper (no directament a user_func)
-- Preparar pila auxiliar 
-- Saltar a user_func
-- Exectuar "int 0x2b"
+3.1. Preparar pila auxiliar
+3.2. Saltar a user_func
+3.3. Exectuar "int 0x2b"
+
 4. Saltem al handler de la syscall que ens preparara per tornar a usuari original
+
 5. Saltem a la rutina de la syscall que:
-- Restaura el ctx original
-- Marca que fora tractament
-6. Saltem on deuriem abans d'haver rebut la tecla
+5.1. Alliberar el slot exclusiu de la funcio
+5.2. Restaura el ctx original
+5.3. Marca que ja estem fora tractament
+
+6. Saltem on deuriem == abans d'haver rebut la tecla
+
 
 IMPLEMENTACIO
 -------------
-Determinem que nomes hi ha un Wrapper perque sigui mes facil el pas de parametres i no haguem de pensar en casuistiques
-Determinem que la pila d'usuari estara en TLS i no aprofitant la pila actual d'usuari perque aixi la tornada sigui mes facil de gestionar.
-    (Exemple: Saber que tindrem sempre l'espai disponible)
 
-KeyboardEvent
--------------
-Registra en la struct del thread la funcio que li ha passat l'usuari.
-El handler .S tambe guarda la @wrapper perque sys_KeyboardEvent la guardi.
-Aixo ho fem replicant el comportament de ThreadCreate
+init_task1
+----------
+Afegir struct d'info de teclat
 
+sys_exit
+--------
+Eliminar la informacio relacionada amb el teclat i alliberar el struct
+
+sys_fork
+--------
+Assignar un struct d'informacio de teclat al nou process fill
+Inicialitzar els camps d'aquesta struct pertinents
+
+sys_ThreadCreate
+----------------
+Iniciar que no estem en cap tractament de teclat (seguir patro de creacio)
+
+sys_KeyboardEvent
+-----------------
+Inicialitzar els camps de la struct d'informacio de teclat:
+- funcio
+- Wrapper (Aquest es sempre el mateix per facilitar la implementacio del pas de param)
+Soluciona "PROBLEMA #2"
+
+keyboard_routine
+----------------
+(Explicat en WORKFLOW 2.*)
+Soluciona "PROBLEMA #3, 4"
+
+keyboard_return_routine
+-----------------------
+(Explicat en WORKFLOW 5.*)
+Soluciona "PROBLEMA #3, 4"

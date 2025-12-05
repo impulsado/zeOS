@@ -147,7 +147,7 @@ ENTRY(KeyboardEvent)
 
 /* void KeyboardWrapper(void (*func)(char, int), char key, int pressed) */
 /* NOTA: Necessari per poder cridar, despres d'executar funcio usuari, "int 0x2b" */
-/* IMPO: Aqui guardem els parametres cap adalt perque sino quan fem el call afegeix la @ret i aixo ja fa +8 per al offset del primer param*/
+/* IMPO: Aqui guardem els parametres cap adalt perque sino quan fem el call, aquest afegeix la @ret i aixo fa que hi hagi un +8 per al offset del primer param */
 /* IMPO: func es un punter a una funcio, llavors no serveix en accedir a la mem */
 ENTRY(KeyboardWrapper)
 	pushl %ebp

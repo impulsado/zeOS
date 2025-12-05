@@ -178,6 +178,7 @@ int sys_fork(void)
   struct list_head *lhcurrent = NULL;
   union task_union *uchild;
   struct task_struct *father = current();
+  
   // === BASE CASE
   // Comprovar si estem en event de teclat
   CHECK_KEYBOARD_EVENT();
