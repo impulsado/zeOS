@@ -28,12 +28,12 @@ struct task_struct *list_head_to_task_struct(struct list_head *l)
 }
 #endif
 
-extern struct list_head blocked;
-
 // Free task structs
 struct list_head freequeue;
 // Ready queue
 struct list_head readyqueue;
+// Tick wait queue - Threads esperant WaitForTick
+struct list_head tick_waitqueue;
 
 struct thread_group thread_groups[NR_TASKS];
 struct keyboard_info keyboard_infos[NR_TASKS];
@@ -110,7 +110,7 @@ void thread_reset_tls_area(struct task_struct *t)
 
   // === GENERAL CASE
   unsigned char *tls_base = (unsigned char *)THREAD_TLS_VADDR(t->slot_num);
-  memset(tls_base, 0, THREAD_TLS_SIZE); // Ficar a 0 podem pensar com reservar-ho
+  memset(tls_base, 0, THREAD_TLS_SIZE); // Ficar a 0 poden pensar amb reservar-ho
 }
 
 void init_stats(struct stats *s)
@@ -233,6 +233,17 @@ void sched_next_rr(void)
 
 void schedule()
 {
+  struct list_head *pos, *tmp;
+  struct task_struct *t;
+
+  // Desbloquejar threads que esperaven un tick
+  // NOTA: Nosaltres sabem que aqui dins sempre hi haura threads en estat ST_BLOCKED
+  list_for_each_safe(pos, tmp, &tick_waitqueue)
+  {
+    t = list_entry(pos, struct task_struct, list);
+    update_process_state_rr(t, &readyqueue);
+  }
+
   update_sched_data_rr();
   if (needs_sched_rr())
   {
@@ -343,6 +354,7 @@ void init_sched()
 {
   init_freequeue();
   INIT_LIST_HEAD(&readyqueue);
+  INIT_LIST_HEAD(&tick_waitqueue);
 }
 
 struct task_struct *current()
@@ -453,7 +465,7 @@ int thread_alloc_stack_slot(struct task_struct *t)
   if (slot == THREAD_STACK_SLOT_NONE)
     return -EAGAIN;
 
-  // Assignar el slot trovat
+  // Assignar el slot trobat
   return thread_alloc_specific_stack_slot(t, slot);
 }
 

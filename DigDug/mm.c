@@ -94,7 +94,7 @@ void set_user_pages( struct task_struct *task )
   	process_PT[PAG_LOG_INIT_CODE+pag].bits.present = 1;
   }
   
-  /* DATA (Only the first page is mapped) */ 
+  /* DATA - Mapejar nomes la primera pagina de dades */
   for (pag=0;pag<NUM_PAG_DATA;pag++)
   {
 	  process_PT[PAG_LOG_INIT_DATA+pag].entry = 0;

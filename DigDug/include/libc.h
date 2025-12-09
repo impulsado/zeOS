@@ -39,4 +39,7 @@ void ThreadWrapper(void (*function)(void *arg), void *parameter);
 int KeyboardEvent(void (*func)(char key, int pressed));
 void KeyboardWrapper(void (*func)(char, int), char key, int pressed);
 
+// === TIME
+int WaitForTick();
+
 #endif /* __LIBC_H__ */

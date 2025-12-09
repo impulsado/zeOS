@@ -217,6 +217,12 @@ void page_fault_routine_new(unsigned int fault_addr)
     valid = (lower_page <= page) && (page <= upper_page);
   }
 
+  // Comprovar si es dins del rang de DATA
+  if (!valid)
+  {
+    valid = (page >= PAG_LOG_INIT_DATA) && (page < (PAG_LOG_INIT_DATA + NUM_PAG_DATA));
+  }
+
   if (!valid)
     goto invalid_addr;
 

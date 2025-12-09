@@ -1,5 +1,5 @@
 #######################
-## MILESTONE 1
+### MILESTONE 1
 #######################
 
 EXPLICACIO
@@ -84,7 +84,7 @@ Modifiquem la pila de sistema per a saltar a ThreadWrapper
 
 
 #######################
-## MILESTONE 2
+### MILESTONE 2
 #######################
 
 IDEA
@@ -185,3 +185,90 @@ keyboard_return_routine
 -----------------------
 (Explicat en WORKFLOW 5.*)
 Soluciona "PROBLEMA #3, 4"
+
+
+
+
+
+#######################
+### MILESTONE 3
+#######################
+
+IDEA
+----
+Tractar la pantalla com un buffer.
+Per no haver de fer multiples crides a la pantalla i pecar de llarga latencia, creem un vector que simula la pantalla.
+Quan tinguem el resultat final, enviem el vector temporal al write perque aquest ho pinti per pantalla.
+
+
+IMPLEMENTACIO
+-------------
+
+sys_write
+---------
+Afegir la implementacio que usa un "copy_from_user" les dades del vector temporal cap a la zona de memoria especifica de la pantalla.
+
+check_fd
+--------
+Accepta el fd == 10
+
+
+JUSTIFICACIO
+------------
+Sabem que s'executen 18 ticks/segon.
+Sabem que fps = frames_total / segon
+Contem la quantitat de ticks en executar un bucle que pinta la pantalla simulant que:
+    - Cada pintada == frame
+    - Total iteracions = total_frames
+Sapiguent els ticks que han passat (fent una resta) podem fer el calcul dels
+
+
+
+
+
+#######################
+### MILESTONE 4
+#######################
+
+IDEA
+----
+Tindre una cua, igual que readyqueue, per ficar els threads que estan pendents de rebre interrupcio rellotge.
+
+
+NOVES ESTRUCTURES
+-----------------
+
+struct list_head tick_waitqueue
+--------------------------------
+S'afegeix aquesta estructura per a poder diferenciar el threads que estan "BLOCK" per causa de "WaitForTick"
+Si no la tinguessim i nomes hi hagues una cua "blockedqueue" a l'hora d'iterarla i despertar els threads, hauriem de fer 
+comprovacions i revisar per quin motiu es.
+
+
+WORKFLOW
+--------
+1. Usuari crida la funcio de sistema desde un thread
+2. Aquest thread s'afegeix a una cua especial
+3. Cada vegada que hi hagi un tick, es revisa aquesta cua
+4. Per a tots els threads en aquesta, passen a la cua de ready
+
+
+IMPLEMENTACIO
+-------------
+
+WaitForTick
+-----------
+Handler simple.
+
+sys_WaitForTick
+---------------
+Comprova que no estiguem en tractament de teclat.
+Si no ho estem, fica el thread a la cua especial i forsa un canvi de context.
+
+schedule
+--------
+Itera tota la cua de forma segura canviant els threads perque estiguin en la readyqueue.
+
+init_sched
+----------
+Inicialitzada la nova cua.

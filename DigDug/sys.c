@@ -31,7 +31,7 @@ void * get_ebp();
 #define TEMP_DATA_COPY_PAGE (TEMP_STACK_COPY_BASE - 1)
 
 // Macro per comprovar si estem en un event de teclat
-// NOTA: Aquesta sintaxis me l'ha dit el ChatGPT
+// NOTA: Aquesta sintaxi me l'ha dit el ChatGPT
 #define CHECK_KEYBOARD_EVENT() \
   do { \
     if (current()->in_keyboard_event) \
@@ -143,7 +143,7 @@ void sys_exit()
 
 int check_fd(int fd, int permissions)
 {
-  if (fd!=1) return -EBADF; 
+  if (fd!=1 && fd!=10) return -EBADF; 
   if (permissions!=ESCRIPTURA) return -EACCES; 
   return 0;
 }
@@ -344,19 +344,36 @@ int sys_fork(void)
 #define TAM_BUFFER 512
 
 int sys_write(int fd, char *buffer, int nbytes) {
-char localbuffer [TAM_BUFFER];
-int bytes_left;
-int ret;
+  char localbuffer [TAM_BUFFER];
+  int bytes_left;
+  int ret;
 
 	CHECK_KEYBOARD_EVENT();
 
 	if ((ret = check_fd(fd, ESCRIPTURA)))
 		return ret;
+
 	if (nbytes < 0)
 		return -EINVAL;
+
 	if (!access_ok(VERIFY_READ, buffer, nbytes))
 		return -EFAULT;
 	
+  // Pantalla (fd == 10)
+  // NOTA: Escriptura directa a memoria de video 0xb8000
+  // Format: 80 columnes x 25 files x 2 bytes (color, caracter)
+  if (fd == 10)
+  {
+    int max_size = 80 * 25 * 2;
+
+    if (nbytes > max_size) 
+      nbytes = max_size;
+
+    copy_from_user(buffer, (void*)0xb8000, nbytes);
+    
+    return nbytes;
+  }
+
 	bytes_left = nbytes;
 	while (bytes_left > TAM_BUFFER) {
 		copy_from_user(buffer, localbuffer, TAM_BUFFER);
@@ -410,6 +427,16 @@ int sys_get_stats(int pid, struct stats *st)
     }
   }
   return -ESRCH; /*ESRCH */
+}
+
+int sys_WaitForTick()
+{
+  CHECK_KEYBOARD_EVENT();
+  
+  update_process_state_rr(current(), &tick_waitqueue);  // Aixo ja fica thread en ST_BLOCKED
+  sched_next_rr();
+  
+  return 0;
 }
 
 int sys_ThreadCreate(void (*function)(void* arg), void* parameter, void (*_wrapper)(void* arg))

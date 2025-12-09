@@ -51,6 +51,15 @@ ENTRY(gettime)
 	popl %ebp
 	ret
 
+/* int WaitForTick() */
+ENTRY(WaitForTick)
+	pushl %ebp
+	movl %esp, %ebp
+	movl $11, %eax
+	call syscall_sysenter
+	popl %ebp
+	ret
+
 /* int getpid() */
 ENTRY(getpid)
 	pushl %ebp
