@@ -41,5 +41,6 @@ void KeyboardWrapper(void (*func)(char, int), char key, int pressed);
 
 // === TIME
 int WaitForTick();
+int gettime();
 
 #endif /* __LIBC_H__ */

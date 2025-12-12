@@ -272,3 +272,48 @@ Itera tota la cua de forma segura canviant els threads perque estiguin en la rea
 init_sched
 ----------
 Inicialitzada la nova cua.
+
+
+
+
+
+#######################
+### MILESTONE 5 (DigDug)
+#######################
+
+DigDug
+------
+NOTA: No he jugat mai al DigDug pero he fet que si et menges terra --> Incrementi punts.
+Tambe he implementat enemics que si et toquen --> Mort.
+
+
+IDEA
+----
+3 Threads:
+- Pantalla (Requisit)
+- Logica principal: Podria haver-ho fet en main, pero em semblava mes estetic en un altre thread
+- Logica enemic (Requisit)
+
+3 Estats:
+- LOADING: Mostrar info principal
+    - "S" --> PLAYING
+
+- PLAYING: Jugar com a tal
+    - "ESC" --> LOADING
+    - Tocat per enemig --> GAMEOVER
+
+- GAMEOVER: Informar de mort
+    - "ESC" --> LOADING
+
+
+IMPLEMENTACIO
+-------------
+La implementacio del joc es bastant trivial.
+Variables per guardar estats, movimiments i comprovacions per evitar sortir de rang o gestionar estats.
+Els enemics tenen un algoritme supercomplex que va dir el Baka Baka fent us d'heuristiques sobre el millor moviment en base a l'estat del jocs, bla bla bla 
+*voz en off "Mentida: Segueix al jugador principal de forma una mica mes lenta per permetre jugar comodament"
+
+ThreadCreate per crear els threads mencionats.
+KeyboardEvent per registrar una funcio que depen del estat del joc, fa una cosa o una altra.
+WaitForTick per evitar que un thread ocupi tota la CPU i poder anar rotant entre ells i que sigui mes fluit.
+Tot esta envoltat en whiles perque nomes serveix per jugar a aquest joc
